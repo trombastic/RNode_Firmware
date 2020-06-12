@@ -350,13 +350,20 @@ void eeprom_write(uint8_t addr, uint8_t byte) {
 	if (!eeprom_info_locked() && addr >= 0 && addr < EEPROM_RESERVED) {
 	#if defined(ESP32)
     	EEPROM.write(eeprom_addr(addr), byte);
-    	EEPROM.commit();
+    	//EEPROM.commit();
 	#else
 		EEPROM.update(eeprom_addr(addr), byte);
     #endif
 	} else {
 		kiss_indicate_error(ERROR_EEPROM_LOCKED);
 	}
+}
+
+
+void eeprom_commit() {
+  #if defined(ESP32)
+  EEPROM.commit();
+  #endif
 }
 
 void eeprom_erase() {

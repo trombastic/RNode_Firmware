@@ -31,6 +31,7 @@
 	#define CMD_CONF_SAVE   0x53
 	#define CMD_CONF_DELETE 0x54
 	#define CMD_UNLOCK_ROM	0x59
+  #define CMD_ROM_COMMIT  0x5A
 	#define ROM_UNLOCK_BYTE 0xF8
 
 	#define DETECT_REQ	 	0x73

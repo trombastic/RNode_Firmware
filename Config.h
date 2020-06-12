@@ -54,8 +54,8 @@
 		const int pin_cs = 4;
 		const int pin_reset = 3;
 		const int pin_dio = 2;
-		const int pin_led_rx = 12;
-		const int pin_led_tx = 13;
+		const int pin_led_rx = 21;
+		const int pin_led_tx = 21;
 
 		#define FLOW_CONTROL_ENABLED true
 		#define QUEUE_SIZE 24
@@ -70,8 +70,8 @@
 		const int pin_cs = SS;//18;
 		const int pin_reset = 23;
 		const int pin_dio = 26;
-		const int pin_led_rx = 14;
-		const int pin_led_tx = 14;
+		const int pin_led_rx = 25;
+		const int pin_led_tx = 25;
 
 		#define FLOW_CONTROL_ENABLED true
 		#define QUEUE_SIZE 24

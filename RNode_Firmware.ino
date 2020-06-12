@@ -500,6 +500,8 @@ void serialCallback(uint8_t sbyte) {
         if (frame_len == 2) {
           eeprom_write(cbuf[0], cbuf[1]);
         }
+    } else if (command == CMD_ROM_COMMIT) {
+      eeprom_commit();
     } else if (command == CMD_FW_VERSION) {
       kiss_indicate_version();
     } else if (command == CMD_CONF_SAVE) {
