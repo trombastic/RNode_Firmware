@@ -1,9 +1,19 @@
-#include <EEPROM.h>
+#include <stddef.h>
+#ifndef ESP32
+#include <util/atomic.h>
+#endif
 #include "LoRa.h"
 #include "ROM.h"
 #include "Config.h"
 #include "Framing.h"
 #include "MD5.h"
+#include <EEPROM.h>
+
+//#if defined(ESP32)
+//#include <EEPROM32_Rotate.h>
+//#endif
+//
+//EEPROM32_Rotate EEPROMr;
 
 void led_rx_on()  { digitalWrite(pin_led_rx, HIGH); }
 void led_rx_off() {	digitalWrite(pin_led_rx, LOW); }
@@ -69,13 +79,7 @@ void led_indicate_standby() {
 			led_standby_direction = -1;
 		}
 		led_standby_value += led_standby_direction;
-
-	#if defined(ESP32)
-		ledcWrite(ch_led_rx, led_standby_value);
-	#else
-		analogWrite(pin_led_rx, led_standby_value);
-	#endif
-		
+		//analogWrite(pin_led_rx, led_standby_value);		
 		digitalWrite(pin_led_tx, 0);
 	}
 }
@@ -91,37 +95,32 @@ void led_indicate_not_ready() {
 		}
 		led_standby_value += led_standby_direction;
 
-	#if defined(ESP32)
-		ledcWrite(ch_led_tx, led_standby_value);
-	#else
-		analogWrite(pin_led_tx, led_standby_value);
-	#endif
-		
+		//analogWrite(pin_led_tx, led_standby_value);		
 		digitalWrite(pin_led_rx, 0);
 	}
 }
 
 void escapedSerialWrite(uint8_t byte) {
-	if (byte == FEND) { Serial.write(FESC); byte = TFEND; }
-    if (byte == FESC) { Serial.write(FESC); byte = TFESC; }
+	 if (byte == FEND) { Serial.write(FESC); byte = TFEND; }
+   if (byte == FESC) { Serial.write(FESC); byte = TFESC; }
     Serial.write(byte);
 }
 
-void kiss_indicate_error(uint8_t error_code) {
+void IRAM_ATTR kiss_indicate_error(uint8_t error_code) {
 	Serial.write(FEND);
 	Serial.write(CMD_ERROR);
 	Serial.write(error_code);
 	Serial.write(FEND);
 }
 
-void kiss_indicate_radiostate() {
+void IRAM_ATTR kiss_indicate_radiostate() {
 	Serial.write(FEND);
 	Serial.write(CMD_RADIO_STATE);
 	Serial.write(radio_online);
 	Serial.write(FEND);
 }
 
-void kiss_indicate_stat_rx() {
+void IRAM_ATTR kiss_indicate_stat_rx() {
 	Serial.write(FEND);
 	Serial.write(CMD_STAT_RX);
 	escapedSerialWrite(stat_rx>>24);
@@ -131,7 +130,7 @@ void kiss_indicate_stat_rx() {
 	Serial.write(FEND);
 }
 
-void kiss_indicate_stat_tx() {
+void IRAM_ATTR kiss_indicate_stat_tx() {
 	Serial.write(FEND);
 	Serial.write(CMD_STAT_TX);
 	escapedSerialWrite(stat_tx>>24);
@@ -141,43 +140,50 @@ void kiss_indicate_stat_tx() {
 	Serial.write(FEND);
 }
 
-void kiss_indicate_stat_rssi() {
+void IRAM_ATTR kiss_indicate_stat_rssi() {
 	uint8_t packet_rssi_val = (uint8_t)(last_rssi+rssi_offset);
 	Serial.write(FEND);
 	Serial.write(CMD_STAT_RSSI);
-	Serial.write(packet_rssi_val);
+	escapedSerialWrite(packet_rssi_val);
 	Serial.write(FEND);
 }
 
-void kiss_indicate_radio_lock() {
+void IRAM_ATTR kiss_indicate_stat_snr() {
+	Serial.write(FEND);
+	Serial.write(CMD_STAT_SNR);
+	escapedSerialWrite(last_snr_raw);
+	Serial.write(FEND);
+}
+
+void IRAM_ATTR kiss_indicate_radio_lock() {
 	Serial.write(FEND);
 	Serial.write(CMD_RADIO_LOCK);
 	Serial.write(radio_locked);
 	Serial.write(FEND);
 }
 
-void kiss_indicate_spreadingfactor() {
+void IRAM_ATTR kiss_indicate_spreadingfactor() {
 	Serial.write(FEND);
 	Serial.write(CMD_SF);
 	Serial.write((uint8_t)lora_sf);
 	Serial.write(FEND);
 }
 
-void kiss_indicate_codingrate() {
+void IRAM_ATTR kiss_indicate_codingrate() {
 	Serial.write(FEND);
 	Serial.write(CMD_CR);
 	Serial.write((uint8_t)lora_cr);
 	Serial.write(FEND);
 }
 
-void kiss_indicate_txpower() {
+void IRAM_ATTR kiss_indicate_txpower() {
 	Serial.write(FEND);
 	Serial.write(CMD_TXPOWER);
 	Serial.write((uint8_t)lora_txp);
 	Serial.write(FEND);
 }
 
-void kiss_indicate_bandwidth() {
+void IRAM_ATTR kiss_indicate_bandwidth() {
 	Serial.write(FEND);
 	Serial.write(CMD_BANDWIDTH);
 	escapedSerialWrite(lora_bw>>24);
@@ -187,7 +193,7 @@ void kiss_indicate_bandwidth() {
 	Serial.write(FEND);
 }
 
-void kiss_indicate_frequency() {
+void IRAM_ATTR kiss_indicate_frequency() {
 	Serial.write(FEND);
 	Serial.write(CMD_FREQUENCY);
 	escapedSerialWrite(lora_freq>>24);
@@ -197,21 +203,28 @@ void kiss_indicate_frequency() {
 	Serial.write(FEND);
 }
 
-void kiss_indicate_random(uint8_t byte) {
+void IRAM_ATTR kiss_indicate_random(uint8_t byte) {
 	Serial.write(FEND);
 	Serial.write(CMD_RANDOM);
 	Serial.write(byte);
 	Serial.write(FEND);
 }
 
-void kiss_indicate_ready() {
+void IRAM_ATTR kiss_indicate_ready() {
 	Serial.write(FEND);
 	Serial.write(CMD_READY);
 	Serial.write(0x01);
 	Serial.write(FEND);
 }
 
-void kiss_indicate_promisc() {
+void IRAM_ATTR kiss_indicate_not_ready() {
+	Serial.write(FEND);
+	Serial.write(CMD_READY);
+	Serial.write(0x00);
+	Serial.write(FEND);
+}
+
+void IRAM_ATTR kiss_indicate_promisc() {
 	Serial.write(FEND);
 	Serial.write(CMD_PROMISC);
 	if (promisc) {
@@ -222,14 +235,14 @@ void kiss_indicate_promisc() {
 	Serial.write(FEND);
 }
 
-void kiss_indicate_detect() {
+void IRAM_ATTR kiss_indicate_detect() {
 	Serial.write(FEND);
 	Serial.write(CMD_DETECT);
 	Serial.write(DETECT_RESP);
 	Serial.write(FEND);
 }
 
-void kiss_indicate_version() {
+void IRAM_ATTR kiss_indicate_version() {
 	Serial.write(FEND);
 	Serial.write(CMD_FW_VERSION);
 	Serial.write(MAJ_VERS);
@@ -339,7 +352,7 @@ void eeprom_dump_all() {
 	}
 }
 
-void kiss_dump_eeprom() {
+void IRAM_ATTR kiss_dump_eeprom() {
 	Serial.write(FEND);
 	Serial.write(CMD_ROM_READ);
 	eeprom_dump_all();
@@ -350,7 +363,6 @@ void eeprom_write(uint8_t addr, uint8_t byte) {
 	if (!eeprom_info_locked() && addr >= 0 && addr < EEPROM_RESERVED) {
 	#if defined(ESP32)
     	EEPROM.write(eeprom_addr(addr), byte);
-    	//EEPROM.commit();
 	#else
 		EEPROM.update(eeprom_addr(addr), byte);
     #endif
@@ -362,7 +374,9 @@ void eeprom_write(uint8_t addr, uint8_t byte) {
 
 void eeprom_commit() {
   #if defined(ESP32)
+  timerStop(timer);
   EEPROM.commit();
+  timerRestart(timer);
   #endif
 }
 
@@ -375,7 +389,9 @@ void eeprom_erase() {
 	    #endif
 	}
 	#if defined(ESP32)
-		EEPROM.commit();
+  timerStop(timer);
+  EEPROM.commit();
+  timerRestart(timer);
 	#endif
 	while (true) { led_tx_on(); led_rx_off(); }
 }
@@ -456,7 +472,6 @@ void eeprom_conf_load() {
 
 void eeprom_conf_save() {
 	if (hw_ready && radio_online) {
-
 	#if defined(ESP32)
 		EEPROM.write(eeprom_addr(ADDR_CONF_SF), lora_sf);
 		EEPROM.write(eeprom_addr(ADDR_CONF_CR), lora_cr);
@@ -473,8 +488,10 @@ void eeprom_conf_save() {
 		EEPROM.write(eeprom_addr(ADDR_CONF_FREQ)+0x03, lora_freq);
 
 		EEPROM.write(eeprom_addr(ADDR_CONF_OK), CONF_OK_BYTE);
-		EEPROM.commit();
-	#else
+    timerStop(timer);
+    EEPROM.commit();
+    timerRestart(timer);
+  #else
   		EEPROM.update(eeprom_addr(ADDR_CONF_SF), lora_sf);
   		EEPROM.update(eeprom_addr(ADDR_CONF_CR), lora_cr);
   		EEPROM.update(eeprom_addr(ADDR_CONF_TXP), lora_txp);
@@ -499,8 +516,10 @@ void eeprom_conf_save() {
 
 void eeprom_conf_delete() {
 	#if defined(ESP32)
-    	EEPROM.write(eeprom_addr(ADDR_CONF_OK), 0x00);
-    	EEPROM.commit();
+    	EEPROM.write(eeprom_addr(ADDR_CONF_OK), 0x00);  
+    	timerStop(timer);
+    EEPROM.commit();
+    timerRestart(timer);
 	#else
     	EEPROM.update(eeprom_addr(ADDR_CONF_OK), 0x00);
 	#endif
@@ -509,4 +528,208 @@ void eeprom_conf_delete() {
 void unlock_rom() {
 	led_indicate_error(50);
 	eeprom_erase();
+}
+
+typedef struct FIFOBuffer
+{
+  unsigned char *begin;
+  unsigned char *end;
+  unsigned char * volatile head;
+  unsigned char * volatile tail;
+} FIFOBuffer;
+
+inline bool fifo_isempty(const FIFOBuffer *f) {
+  return f->head == f->tail;
+}
+
+inline bool fifo_isfull(const FIFOBuffer *f) {
+  return ((f->head == f->begin) && (f->tail == f->end)) || (f->tail == f->head - 1);
+}
+
+inline void fifo_push(FIFOBuffer *f, unsigned char c) {
+  *(f->tail) = c;
+  
+  if (f->tail == f->end) {
+    f->tail = f->begin;
+  } else {
+    f->tail++;
+  }
+}
+
+inline unsigned char fifo_pop(FIFOBuffer *f) {
+  if(f->head == f->end) {
+    f->head = f->begin;
+    return *(f->end);
+  } else {
+    return *(f->head++);
+  }
+}
+
+inline void fifo_flush(FIFOBuffer *f) {
+  f->head = f->tail;
+}
+
+static inline bool fifo_isempty_locked(const FIFOBuffer *f) {
+  bool result;
+  #ifdef ESP32
+    timerStop(timer);
+    result = fifo_isempty(f);
+    timerRestart(timer);
+  #else
+  ATOMIC_BLOCK(ATOMIC_RESTORESTATE) {
+    result = fifo_isempty(f);
+  }
+  #endif
+  return result;
+}
+
+static inline bool fifo_isfull_locked(const FIFOBuffer *f) {
+  bool result;
+  #ifdef ESP32
+  timerStop(timer);
+  result = fifo_isfull(f);
+  timerRestart(timer);
+  #else
+  ATOMIC_BLOCK(ATOMIC_RESTORESTATE) {
+    result = fifo_isfull(f);
+  }
+  #endif
+  return result;
+}
+
+static inline void fifo_push_locked(FIFOBuffer *f, unsigned char c) {
+  #ifdef ESP32
+  timerStop(timer);
+    fifo_push(f, c);
+  timerRestart(timer);
+  #else
+  ATOMIC_BLOCK(ATOMIC_RESTORESTATE) {
+    fifo_push(f, c);
+  }
+  #endif
+}
+
+static inline unsigned char fifo_pop_locked(FIFOBuffer *f) {
+  unsigned char c;
+  #ifdef ESP32
+    timerStop(timer);
+    c = fifo_pop(f);
+    timerRestart(timer);
+  #else
+    ATOMIC_BLOCK(ATOMIC_RESTORESTATE) {
+      c = fifo_pop(f);
+    }
+  #endif
+  return c;
+}
+
+inline void fifo_init(FIFOBuffer *f, unsigned char *buffer, size_t size) {
+  f->head = f->tail = f->begin = buffer;
+  f->end = buffer + size;
+}
+
+inline size_t fifo_len(FIFOBuffer *f) {
+  return f->end - f->begin;
+}
+
+typedef struct FIFOBuffer16
+{
+  size_t *begin;
+  size_t *end;
+  size_t * volatile head;
+  size_t * volatile tail;
+} FIFOBuffer16;
+
+inline bool fifo16_isempty(const FIFOBuffer16 *f) {
+  return f->head == f->tail;
+}
+
+inline bool fifo16_isfull(const FIFOBuffer16 *f) {
+  return ((f->head == f->begin) && (f->tail == f->end)) || (f->tail == f->head - 1);
+}
+
+inline void fifo16_push(FIFOBuffer16 *f, size_t c) {
+  *(f->tail) = c;
+
+  if (f->tail == f->end) {
+    f->tail = f->begin;
+  } else {
+    f->tail++;
+  }
+}
+
+inline size_t fifo16_pop(FIFOBuffer16 *f) {
+  if(f->head == f->end) {
+    f->head = f->begin;
+    return *(f->end);
+  } else {
+    return *(f->head++);
+  }
+}
+
+inline void fifo16_flush(FIFOBuffer16 *f) {
+  f->head = f->tail;
+}
+
+static inline bool fifo16_isempty_locked(const FIFOBuffer16 *f) {
+  bool result;
+  #ifdef ESP32
+    timerStop(timer);
+    result = fifo16_isempty(f);
+    timerRestart(timer);
+  #else
+  ATOMIC_BLOCK(ATOMIC_RESTORESTATE) {
+    result = fifo16_isempty(f);
+  }
+  #endif
+  return result;
+}
+
+static inline bool fifo16_isfull_locked(const FIFOBuffer16 *f) {
+  bool result;
+  #ifdef ESP32
+    timerStop(timer);
+    result = fifo16_isfull(f);
+    timerRestart(timer);
+  #else
+  ATOMIC_BLOCK(ATOMIC_RESTORESTATE) {
+    result = fifo16_isfull(f);
+  }
+  #endif
+  return result;
+}
+
+static inline void fifo16_push_locked(FIFOBuffer16 *f, size_t c) {
+  #ifdef ESP32
+    timerStop(timer);
+    fifo16_push(f, c);
+    timerRestart(timer);
+  #else
+  ATOMIC_BLOCK(ATOMIC_RESTORESTATE) {
+    fifo16_push(f, c);
+  }
+  #endif
+}
+
+static inline size_t fifo16_pop_locked(FIFOBuffer16 *f) {
+  size_t c;
+  #ifdef ESP32
+    timerStop(timer);
+    c = fifo16_pop(f);
+    timerRestart(timer);
+  #else
+  ATOMIC_BLOCK(ATOMIC_RESTORESTATE) {
+    c = fifo16_pop(f);
+  }
+  #endif
+  return c;
+}
+
+inline void fifo16_init(FIFOBuffer16 *f, size_t *buffer, size_t size) {
+  f->head = f->tail = f->begin = buffer;
+  f->end = buffer + size;
+}
+
+inline size_t fifo16_len(FIFOBuffer16 *f) {
+  return (f->end - f->begin);
 }

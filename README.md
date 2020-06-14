@@ -1,7 +1,36 @@
 # RNode Firmware
 
+## WARNING
+
+This is a port of the RNode firmware developed by Mark Qvist to ESP 32
+microprocessors. I developed the port on a Heltec ESP32 Lora (V2).
+
+It's not complete yet (some parts like reading RSSI values have been
+disabled and needs fixing). But I was able to run a SSH connection between
+two of those devices.
+
+You will need my port of rnodeconf as well to use it! The devices
+run as "model" B1 and hwrev 146, so a call to rnodeconf starts with:
+
+``` 
+ rnodeconf   /dev/ttyUSB0  --model "B1" --hwrev 146 
+```
+
+(replace the USB0 with the USB port of your device).
+
+I release the port under the same MIT license as Mark did and as always
+(and especially with this port): it comes with no warrenty. Please keep
+in mind that I am not an expert in microprocessor programming.
+
+This port in only suitable for ESP32s. I tried to keep it portable, but
+too much is different on a ESP32 compared to the ATmega1284p Mark uses.
+
+
+## Original documentation follows
+
 This is the firmware for [RNode](https://unsigned.io/rnode), a very flexible LoRa-based communication device. RNode can functions as a:
 
+- A general purpose long-range data radio
 - Network adapter for [RNS](https://github.com/markqvist/Reticulum)
 - LoRa interface for your computer (or any device with a USB or serial port)
 - Generic [LoRa-based network adapter](https://unsigned.io/15-kilometre-ssh-link-with-rnode/) for your Linux devices
@@ -17,7 +46,7 @@ For adding RNode to your Arduino environment, please see [this post](https://uns
 For configuring an RNode with this firmware, please have a look at the [RNode Config Utility](https://github.com/markqvist/rnodeconfigutil).
 
 ## Current Status
-The RNode firmware is relatively well tested, but there's a lot of features being added, so you might still find a bug. If you do, please report it as an issue here, so I can fix it!
+The RNode firmware can be considered stable at this point. If you do find a bug or discover unintended behaviour, please report it as an issue here, so I can fix it!
 
 ## Operating Modes
 RNode can operate in two modes, host-controlled (default) and TNC mode:
@@ -43,7 +72,6 @@ All communications to and from the board uses [KISS framing](https://en.wikipedi
 | Radio Lock       | 0x07 | Sets or queries the radio lock
 | Device Detect    | 0x08 | Probe command for device detection
 | Promiscuous      | 0x0E | Sets or queries promiscuous mode
-| Ready            | 0x0F | Flow control command indicating ready for TX
 | RX Stats         | 0x21 | Queries received bytes
 | TX Stats         | 0x22 | Queries transmitted bytes
 | Last RSSI        | 0x23 | Indicates RSSI of last packet received

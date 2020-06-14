@@ -1,46 +1,196 @@
 #include <Arduino.h>
 #include <SPI.h>
+#ifdef ESP32
+hw_timer_t * timer = NULL;
+#endif
+
 #include "Utilities.h"
+
+FIFOBuffer serialFIFO;
+uint8_t serialBuffer[CONFIG_UART_BUFFER_SIZE + 1];
+
+FIFOBuffer16 packet_starts;
+size_t packet_starts_buf[CONFIG_QUEUE_MAX_LENGTH + 1];
+
+FIFOBuffer16 packet_lengths;
+size_t packet_lengths_buf[CONFIG_QUEUE_MAX_LENGTH + 1];
+
+uint8_t packet_queue[CONFIG_QUEUE_SIZE];
+
+volatile uint8_t queue_height = 0;
+volatile size_t queued_bytes = 0;
+volatile size_t queue_cursor = 0;
+volatile size_t current_packet_start = 0;
+volatile bool serial_buffering = false;
+
+
+char sbuf[128];
+
+
 
 void setup() {
   // Seed the PRNG
   randomSeed(analogRead(0));
-
-  // Initialise serial communication
   Serial.begin(serial_baudrate);
   while (!Serial);
 
-  // Configure input and output pins
   #if defined(ESP32)
-    ledcAttachPin(pin_led_rx, ch_led_rx);
-    ledcSetup(ch_led_rx, 5000, 8);
-      
-    ledcAttachPin(pin_led_tx, ch_led_tx);
-    ledcSetup(ch_led_tx, 5000, 8);
-  #else
-    pinMode(pin_led_rx, OUTPUT);
-    pinMode(pin_led_tx, OUTPUT);
+    
+//    EEPROMr.add_by_name("eeprom");
+//    EEPROMr.offset(0xFF0);
+//    EEPROMr.begin(EEPROM_SIZE);
+
+  EEPROM.begin(EEPROM_SIZE);
+
   #endif
+  // Initialise serial communication
+  memset(serialBuffer, 0, sizeof(serialBuffer));
+  fifo_init(&serialFIFO, serialBuffer, CONFIG_UART_BUFFER_SIZE);
+
+  // Configure input and output pins
+  pinMode(pin_led_rx, OUTPUT);
+  pinMode(pin_led_tx, OUTPUT);
+
 
   // Initialise buffers
   memset(pbuf, 0, sizeof(pbuf));
-  memset(sbuf, 0, sizeof(sbuf));
   memset(cbuf, 0, sizeof(cbuf));
-  
-  #if QUEUE_SIZE > 0
-    memset(qbuf, 0, sizeof(qbuf));
-    memset(queued_lengths, 0, sizeof(queued_lengths));
-  #endif
+
+  memset(packet_queue, 0, sizeof(packet_queue));
+
+  memset(packet_starts_buf, 0, sizeof(packet_starts_buf));
+  fifo16_init(&packet_starts, packet_starts_buf, CONFIG_QUEUE_MAX_LENGTH);
+
+  memset(packet_lengths_buf, 0, sizeof(packet_starts_buf));
+  fifo16_init(&packet_lengths, packet_lengths_buf, CONFIG_QUEUE_MAX_LENGTH);
 
   // Set chip select, reset and interrupt
   // pins for the LoRa module
   LoRa.setPins(pin_cs, pin_reset, pin_dio);
 
-  #if defined(ESP32)
-    EEPROM.begin(EEPROM_SIZE);
-  #endif
+  led_indicate_info(2);
+  delay(1000);
+
+  serial_interrupt_init();
+
   // Validate board health, EEPROM and config
   validateStatus();
+}
+
+void IRAM_ATTR receiveCallback(int packet_size) {
+  timerStop(timer);
+  if (!promisc) {
+    // The standard operating mode allows large
+    // packets with a payload up to 500 bytes,
+    // by combining two raw LoRa packets.
+    // We read the 1-byte header and extract
+    // packet sequence number and split flags
+    uint8_t header   = LoRa.read(); packet_size--;
+    uint8_t sequence = packetSequence(header);
+    bool    ready    = false;
+
+    if (isSplitPacket(header) && seq == SEQ_UNSET) {
+      // This is the first part of a split
+      // packet, so we set the seq variable
+      // and add the data to the buffer
+      read_len = 0;
+      seq = sequence;
+      last_rssi = LoRa.packetRssi();
+      last_snr_raw = 0;//LoRa.packetSnrRaw();
+      getPacketData(packet_size);
+    } else if (isSplitPacket(header) && seq == sequence) {
+      // This is the second part of a split
+      // packet, so we add it to the buffer
+      // and set the ready flag.
+      last_rssi = (last_rssi + LoRa.packetRssi()) / 2;
+      last_snr_raw = (last_snr_raw);// + LoRa.packetSnrRaw()) / 2;
+      getPacketData(packet_size);
+      seq = SEQ_UNSET;
+      ready = true;
+    } else if (isSplitPacket(header) && seq != sequence) {
+      // This split packet does not carry the
+      // same sequence id, so we must assume
+      // that we are seeing the first part of
+      // a new split packet.
+      read_len = 0;
+      seq = sequence;
+      last_rssi = LoRa.packetRssi();
+      last_snr_raw = 0;//LoRa.packetSnrRaw();
+      getPacketData(packet_size);
+    } else if (!isSplitPacket(header)) {
+      // This is not a split packet, so we
+      // just read it and set the ready
+      // flag to true.
+
+      if (seq != SEQ_UNSET) {
+        // If we already had part of a split
+        // packet in the buffer, we clear it.
+        read_len = 0;
+        seq = SEQ_UNSET;
+      }
+
+      last_rssi = LoRa.packetRssi();
+      last_snr_raw = 0;//LoRa.packetSnrRaw();
+      getPacketData(packet_size);
+      ready = true;
+    }
+
+    if (ready) {
+      // We first signal the RSSI of the
+      // recieved packet to the host.
+      kiss_indicate_stat_rssi();
+      kiss_indicate_stat_snr();
+
+      // And then write the entire packet
+      Serial.write(FEND);
+      Serial.write(CMD_DATA);
+      for (int i = 0; i < read_len; i++) {
+        uint8_t byte = pbuf[i];
+        if (byte == FEND) {
+          Serial.write(FESC);
+          byte = TFEND;
+        }
+        if (byte == FESC) {
+          Serial.write(FESC);
+          byte = TFESC;
+        }
+        Serial.write(byte);
+      }
+      Serial.write(FEND);
+      read_len = 0;
+    }
+  } else {
+    // In promiscuous mode, raw packets are
+    // output directly over to the host
+    read_len = 0;
+    last_rssi = LoRa.packetRssi();
+    last_snr_raw = 0;//LoRa.packetSnrRaw();
+    getPacketData(packet_size);
+
+    // We first signal the RSSI of the
+    // recieved packet to the host.
+    kiss_indicate_stat_rssi();
+    kiss_indicate_stat_snr();
+
+    // And then write the entire packet
+    Serial.write(FEND);
+    Serial.write(CMD_DATA);
+    for (int i = 0; i < read_len; i++) {
+      uint8_t byte = pbuf[i];
+      if (byte == FEND) {
+        Serial.write(FESC);
+        byte = TFEND;
+      }
+      if (byte == FESC) {
+        Serial.write(FESC);
+        byte = TFESC;
+      }
+      Serial.write(byte);
+    }
+    Serial.write(FEND);
+    read_len = 0;
+  }
+  timerRestart(timer);
 }
 
 bool startRadio() {
@@ -97,167 +247,37 @@ void update_radio_lock() {
   }
 }
 
-void receiveCallback(int packet_size) {
-  if (!promisc) {
-    // The standard operating mode allows large
-    // packets with a payload up to 500 bytes,
-    // by combining two raw LoRa packets.
-    // We read the 1-byte header and extract
-    // packet sequence number and split flags
-    uint8_t header   = LoRa.read(); packet_size--;
-    uint8_t sequence = packetSequence(header);
-    bool    ready    = false;
-
-    if (isSplitPacket(header) && seq == SEQ_UNSET) {
-      // This is the first part of a split
-      // packet, so we set the seq variable
-      // and add the data to the buffer
-      read_len = 0;
-      seq = sequence;
-      last_rssi = LoRa.packetRssi();
-      getPacketData(packet_size);
-    } else if (isSplitPacket(header) && seq == sequence) {
-      // This is the second part of a split
-      // packet, so we add it to the buffer
-      // and set the ready flag.
-      last_rssi = (last_rssi+LoRa.packetRssi())/2;
-      getPacketData(packet_size);
-      seq = SEQ_UNSET;
-      ready = true;
-    } else if (isSplitPacket(header) && seq != sequence) {
-      // This split packet does not carry the
-      // same sequence id, so we must assume
-      // that we are seeing the first part of
-      // a new split packet.
-      read_len = 0;
-      seq = sequence;
-      last_rssi = LoRa.packetRssi();
-      getPacketData(packet_size);
-    } else if (!isSplitPacket(header)) {
-      // This is not a split packet, so we
-      // just read it and set the ready
-      // flag to true.
-
-      if (seq != SEQ_UNSET) {
-        // If we already had part of a split
-        // packet in the buffer, we clear it.
-        read_len = 0;
-        seq = SEQ_UNSET;
-      }
-
-      last_rssi = LoRa.packetRssi();
-      getPacketData(packet_size);
-      ready = true;
-    }
-
-    if (ready) {
-      // We first signal the RSSI of the
-      // recieved packet to the host.
-      Serial.write(FEND);
-      Serial.write(CMD_STAT_RSSI);
-      Serial.write((uint8_t)(last_rssi-rssi_offset));
-      Serial.write(FEND);
-
-      // And then write the entire packet
-      Serial.write(FEND);
-      Serial.write(CMD_DATA);
-      for (int i = 0; i < read_len; i++) {
-        uint8_t byte = pbuf[i];
-        if (byte == FEND) { Serial.write(FESC); byte = TFEND; }
-        if (byte == FESC) { Serial.write(FESC); byte = TFESC; }
-        Serial.write(byte);
-      }
-      Serial.write(FEND);
-      read_len = 0;
-    }  
-  } else {
-    // In promiscuous mode, raw packets are
-    // output directly over to the host
-    read_len = 0;
-    last_rssi = LoRa.packetRssi();
-    getPacketData(packet_size);
-
-    // We first signal the RSSI of the
-    // recieved packet to the host.
-    Serial.write(FEND);
-    Serial.write(CMD_STAT_RSSI);
-    Serial.write((uint8_t)(last_rssi-rssi_offset));
-    Serial.write(FEND);
-
-    // And then write the entire packet
-    Serial.write(FEND);
-    Serial.write(CMD_DATA);
-    for (int i = 0; i < read_len; i++) {
-      uint8_t byte = pbuf[i];
-      if (byte == FEND) { Serial.write(FESC); byte = TFEND; }
-      if (byte == FESC) { Serial.write(FESC); byte = TFESC; }
-      Serial.write(byte);
-    }
-    Serial.write(FEND);
-    read_len = 0;    
-  }
-}
-
-
-bool outboundReady() {
-  #if QUEUE_SIZE > 0
-    if (queue_head != queue_tail) {
-      return true;
-    } else {
-      return false;
-    }
-  #else
-    return outbound_ready;
-  #endif
-}
 
 bool queueFull() {
-  size_t new_queue_head = (queue_head+1)%QUEUE_BUF_SIZE;
-  if (new_queue_head == queue_tail) {
-    return true;
-  } else {
-    return false;
-  }
+  return (queue_height >= CONFIG_QUEUE_MAX_LENGTH || queued_bytes >= CONFIG_QUEUE_SIZE);
 }
 
-void enqueuePacket(size_t length) {
-  size_t new_queue_head = (queue_head+1)%QUEUE_BUF_SIZE;
-  if (new_queue_head != queue_tail) {
-    queued_lengths[queue_head] = length;
-    size_t insert_addr = queue_head * MTU;
-    for (int i = 0; i < length; i++) {
-      qbuf[insert_addr+i] = sbuf[i];
+volatile bool queue_flushing = false;
+void flushQueue(void) {
+  if (!queue_flushing) {
+    queue_flushing = true;
+
+    size_t processed = 0;
+    while (!fifo16_isempty_locked(&packet_starts)) {
+      size_t start = fifo16_pop(&packet_starts);
+      size_t length = fifo16_pop(&packet_lengths);
+
+      if (length >= MIN_L && length <= MTU) {
+        for (size_t i = 0; i < length; i++) {
+          size_t pos = (start + i) % CONFIG_QUEUE_SIZE;
+          tbuf[i] = packet_queue[pos];
+        }
+
+        transmit(length);
+        processed++;
+      }
     }
-    queue_head = new_queue_head;
-    if (!queueFull()) {
-      kiss_indicate_ready();
-    }
-  } else {
-    kiss_indicate_error(ERROR_QUEUE_FULL);
   }
+
+  queue_height = 0;
+  queued_bytes = 0;
+  queue_flushing = false;
 }
-
-#if QUEUE_SIZE > 0
-void processQueue() {
-  size_t fetch_address = queue_tail*MTU;
-  size_t fetch_length  = queued_lengths[queue_tail];
-
-  for (int i = 0; i < fetch_length; i++) {
-    tbuf[i] = qbuf[fetch_address+i];
-    qbuf[fetch_address+i] = 0x00;
-  }
-
-  queued_lengths[queue_tail] = 0;
-
-  queue_tail = ++queue_tail%QUEUE_BUF_SIZE;
-
-  transmit(fetch_length);
-
-  if (!queueFull()) {
-    kiss_indicate_ready();
-  }
-}
-#endif
 
 void transmit(size_t size) {
   if (radio_online) {
@@ -273,12 +293,8 @@ void transmit(size_t size) {
       LoRa.beginPacket();
       LoRa.write(header); written++;
 
-      for (size_t i=0; i < size; i++) {
-        #if QUEUE_SIZE > 0
-          LoRa.write(tbuf[i]);
-        #else
-          LoRa.write(sbuf[i]);
-        #endif
+      for (size_t i = 0; i < size; i++) {
+        LoRa.write(tbuf[i]);
 
         written++;
 
@@ -300,7 +316,7 @@ void transmit(size_t size) {
       // payload of 255 bytes
       led_tx_on();
       size_t  written = 0;
-      
+
       // Cap packets at 255 bytes
       if (size > SINGLE_MTU) {
         size = SINGLE_MTU;
@@ -308,11 +324,7 @@ void transmit(size_t size) {
 
       LoRa.beginPacket();
       for (size_t i; i < size; i++) {
-        #if QUEUE_SIZE > 0
-          LoRa.write(tbuf[i]);
-        #else
-          LoRa.write(sbuf[i]);
-        #endif
+        LoRa.write(tbuf[i]);
 
         written++;
       }
@@ -325,26 +337,34 @@ void transmit(size_t size) {
     kiss_indicate_error(ERROR_TXFAILED);
     led_indicate_error(5);
   }
-
-  #if QUEUE_SIZE == 0
-    if (FLOW_CONTROL_ENABLED)
-        kiss_indicate_ready();
-  #endif
 }
 
 void serialCallback(uint8_t sbyte) {
   if (IN_FRAME && sbyte == FEND && command == CMD_DATA) {
     IN_FRAME = false;
 
-    if (QUEUE_SIZE == 0) {
-      if (outbound_ready) {
-        kiss_indicate_error(ERROR_QUEUE_FULL);
+    if (!fifo16_isfull(&packet_starts) && queued_bytes < CONFIG_QUEUE_SIZE) {
+      size_t s = current_packet_start;
+      size_t e = queue_cursor - 1; if (e == -1) e = CONFIG_QUEUE_SIZE - 1;
+      size_t l;
+
+      if (s != e) {
+        l = (s < e) ? e - s + 1 : CONFIG_QUEUE_SIZE - s + e + 1;
       } else {
-        outbound_ready = true;
+        l = 1;
       }
-    } else {
-      enqueuePacket(frame_len);
+
+      if (l >= MIN_L) {
+        queue_height++;
+
+        fifo16_push(&packet_starts, s);
+        fifo16_push(&packet_lengths, l);
+
+        current_packet_start = queue_cursor;
+      }
+
     }
+
   } else if (sbyte == FEND) {
     IN_FRAME = true;
     command = CMD_UNKNOWN;
@@ -352,64 +372,68 @@ void serialCallback(uint8_t sbyte) {
   } else if (IN_FRAME && frame_len < MTU) {
     // Have a look at the command byte first
     if (frame_len == 0 && command == CMD_UNKNOWN) {
-        command = sbyte;
+      command = sbyte;
     } else if (command == CMD_DATA) {
-        if (sbyte == FESC) {
-            ESCAPE = true;
-        } else {
-            if (ESCAPE) {
-                if (sbyte == TFEND) sbyte = FEND;
-                if (sbyte == TFESC) sbyte = FESC;
-                ESCAPE = false;
-            }
-            sbuf[frame_len++] = sbyte;
+      if (sbyte == FESC) {
+        ESCAPE = true;
+      } else {
+        if (ESCAPE) {
+          if (sbyte == TFEND) sbyte = FEND;
+          if (sbyte == TFESC) sbyte = FESC;
+          ESCAPE = false;
         }
+        if (queue_height < CONFIG_QUEUE_MAX_LENGTH && queued_bytes < CONFIG_QUEUE_SIZE) {
+          queued_bytes++;
+          packet_queue[queue_cursor++] = sbyte;
+          if (queue_cursor == CONFIG_QUEUE_SIZE) queue_cursor = 0;
+        }
+      }
     } else if (command == CMD_FREQUENCY) {
       if (sbyte == FESC) {
-            ESCAPE = true;
+        ESCAPE = true;
+      } else {
+        if (ESCAPE) {
+          if (sbyte == TFEND) sbyte = FEND;
+          if (sbyte == TFESC) sbyte = FESC;
+          ESCAPE = false;
+        }
+        cbuf[frame_len++] = sbyte;
+      }
+
+      if (frame_len == 4) {
+        uint32_t freq = (uint32_t)cbuf[0] << 24 | (uint32_t)cbuf[1] << 16 | (uint32_t)cbuf[2] << 8 | (uint32_t)cbuf[3];
+
+        if (freq == 0) {
+          kiss_indicate_frequency();
         } else {
-            if (ESCAPE) {
-                if (sbyte == TFEND) sbyte = FEND;
-                if (sbyte == TFESC) sbyte = FESC;
-                ESCAPE = false;
-            }
-            cbuf[frame_len++] = sbyte;
+          lora_freq = freq;
+          if (op_mode == MODE_HOST) setFrequency();
+          kiss_indicate_frequency();
         }
-
-        if (frame_len == 4) {
-          uint32_t freq = (uint32_t)cbuf[0] << 24 | (uint32_t)cbuf[1] << 16 | (uint32_t)cbuf[2] << 8 | (uint32_t)cbuf[3];
-
-          if (freq == 0) {
-            kiss_indicate_frequency();
-          } else {
-            lora_freq = freq;
-            if (op_mode == MODE_HOST) setFrequency();
-            kiss_indicate_frequency();
-          }
-        }
+      }
     } else if (command == CMD_BANDWIDTH) {
       if (sbyte == FESC) {
-            ESCAPE = true;
+        ESCAPE = true;
+      } else {
+        if (ESCAPE) {
+          if (sbyte == TFEND) sbyte = FEND;
+          if (sbyte == TFESC) sbyte = FESC;
+          ESCAPE = false;
+        }
+        cbuf[frame_len++] = sbyte;
+      }
+
+      if (frame_len == 4) {
+        uint32_t bw = (uint32_t)cbuf[0] << 24 | (uint32_t)cbuf[1] << 16 | (uint32_t)cbuf[2] << 8 | (uint32_t)cbuf[3];
+
+        if (bw == 0) {
+          kiss_indicate_bandwidth();
         } else {
-            if (ESCAPE) {
-                if (sbyte == TFEND) sbyte = FEND;
-                if (sbyte == TFESC) sbyte = FESC;
-                ESCAPE = false;
-            }
-            cbuf[frame_len++] = sbyte;
+          lora_bw = bw;
+          if (op_mode == MODE_HOST) setBandwidth();
+          kiss_indicate_bandwidth();
         }
-
-        if (frame_len == 4) {
-          uint32_t bw = (uint32_t)cbuf[0] << 24 | (uint32_t)cbuf[1] << 16 | (uint32_t)cbuf[2] << 8 | (uint32_t)cbuf[3];
-
-          if (bw == 0) {
-            kiss_indicate_bandwidth();
-          } else {
-            lora_bw = bw;
-            if (op_mode == MODE_HOST) setBandwidth();
-            kiss_indicate_bandwidth();
-          }
-        }
+      }
     } else if (command == CMD_TXPOWER) {
       if (sbyte == 0xFF) {
         kiss_indicate_txpower();
@@ -479,6 +503,12 @@ void serialCallback(uint8_t sbyte) {
         promisc_disable();
       }
       kiss_indicate_promisc();
+    } else if (command == CMD_READY) {
+      if (!queueFull()) {
+        kiss_indicate_ready();
+      } else {
+        kiss_indicate_not_ready();
+      }
     } else if (command == CMD_UNLOCK_ROM) {
       if (sbyte == ROM_UNLOCK_BYTE) {
         unlock_rom();
@@ -487,19 +517,19 @@ void serialCallback(uint8_t sbyte) {
       kiss_dump_eeprom();
     } else if (command == CMD_ROM_WRITE) {
       if (sbyte == FESC) {
-            ESCAPE = true;
-        } else {
-            if (ESCAPE) {
-                if (sbyte == TFEND) sbyte = FEND;
-                if (sbyte == TFESC) sbyte = FESC;
-                ESCAPE = false;
-            }
-            cbuf[frame_len++] = sbyte;
+        ESCAPE = true;
+      } else {
+        if (ESCAPE) {
+          if (sbyte == TFEND) sbyte = FEND;
+          if (sbyte == TFESC) sbyte = FESC;
+          ESCAPE = false;
         }
+        cbuf[frame_len++] = sbyte;
+      }
 
-        if (frame_len == 2) {
-          eeprom_write(cbuf[0], cbuf[1]);
-        }
+      if (frame_len == 2) {
+        eeprom_write(cbuf[0], cbuf[1]);
+      }
     } else if (command == CMD_ROM_COMMIT) {
       eeprom_commit();
     } else if (command == CMD_FW_VERSION) {
@@ -509,15 +539,29 @@ void serialCallback(uint8_t sbyte) {
     } else if (command == CMD_CONF_DELETE) {
       eeprom_conf_delete();
     }
+
+    serial_buffering = false;
   }
 }
 
 void updateModemStatus() {
   uint8_t status = LoRa.modemStatus();
   last_status_update = millis();
-  if (status & SIG_DETECT == SIG_DETECT) { stat_signal_detected = true; } else { stat_signal_detected = false; }
-  if (status & SIG_SYNCED == SIG_SYNCED) { stat_signal_synced = true; } else { stat_signal_synced = false; }
-  if (status & RX_ONGOING == RX_ONGOING) { stat_rx_ongoing = true; } else { stat_rx_ongoing = false; }
+  if (status & SIG_DETECT == SIG_DETECT) {
+    stat_signal_detected = true;
+  } else {
+    stat_signal_detected = false;
+  }
+  if (status & SIG_SYNCED == SIG_SYNCED) {
+    stat_signal_synced = true;
+  } else {
+    stat_signal_synced = false;
+  }
+  if (status & RX_ONGOING == RX_ONGOING) {
+    stat_rx_ongoing = true;
+  } else {
+    stat_rx_ongoing = false;
+  }
 
   if (stat_signal_detected || stat_signal_synced || stat_rx_ongoing) {
     if (dcd_count < dcd_threshold) {
@@ -544,7 +588,7 @@ void updateModemStatus() {
 }
 
 void checkModemStatus() {
-  if (millis()-last_status_update >= status_interval_ms) {
+  if (millis() - last_status_update >= status_interval_ms) {
     updateModemStatus();
   }
 }
@@ -572,25 +616,26 @@ void validateStatus() {
 void loop() {
   if (radio_online) {
     checkModemStatus();
-    if (outboundReady() && !SERIAL_READING) {
+
+    if (queue_height > 0) {
       if (!dcd_waiting) updateModemStatus();
+
       if (!dcd && !dcd_led) {
         if (dcd_waiting) delay(lora_rx_turnaround_ms);
+
         updateModemStatus();
+
         if (!dcd) {
           dcd_waiting = false;
-          #if QUEUE_SIZE > 0
-            processQueue();
-          #else
-            outbound_ready = false;
-            transmit(frame_len);
-          #endif
+
+          flushQueue();
+
         }
       } else {
         dcd_waiting = true;
       }
     }
-  
+
   } else {
     if (hw_ready) {
       led_indicate_standby();
@@ -600,25 +645,51 @@ void loop() {
     }
   }
 
-  //TODO Investigate and find best location for yielding
-  #if defined(ESP32)
-    yield();
-  #endif
-   
-  if (Serial.available()) {
-    SERIAL_READING = true;
-    char sbyte = Serial.read();
+//  //TODO Investigate and find best location for yielding
+//#if defined(ESP32)
+//  yield();
+//#endif
+
+  if (!fifo_isempty_locked(&serialFIFO)) serial_poll();
+}
+
+volatile bool serial_polling = false;
+void serial_poll() {
+  serial_polling = true;
+
+  while (!fifo_isempty_locked(&serialFIFO)) {
+    char sbyte = fifo_pop(&serialFIFO);
     serialCallback(sbyte);
-    last_serial_read = millis();
-  } else {
-    if (SERIAL_READING && millis()-last_serial_read >= serial_read_timeout_ms) {
-      SERIAL_READING = false;
-    }
   }
 
-  //TODO Investigate and find best location for yielding
-  #if defined(ESP32)
-    yield();
-  #endif
+  serial_polling = false;
+}
 
+#define MAX_CYCLES 20
+// #if defined(ESP32)
+void IRAM_ATTR buffer_serial() {
+  //#else
+  //void buffer_serial() {
+  //#endif
+  if (!serial_buffering) {
+    serial_buffering = true;
+    uint8_t c = 0;
+    while (c < MAX_CYCLES && Serial.available()) {
+      c++;
+
+      if (!fifo_isfull_locked(&serialFIFO)) {
+        fifo_push_locked(&serialFIFO, Serial.read());
+      }
+   }
+    serial_buffering = false;
+  }
+
+}
+
+
+void serial_interrupt_init() {
+    timer = timerBegin(0, 80, true);
+    timerAttachInterrupt(timer, &buffer_serial, true);
+    timerAlarmWrite(timer, 1000, true);
+    timerAlarmEnable(timer);
 }

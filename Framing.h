@@ -22,6 +22,7 @@
 	#define CMD_STAT_RX		0x21
 	#define CMD_STAT_TX		0x22
 	#define CMD_STAT_RSSI	0x23
+	#define CMD_STAT_SNR	0x24
 	#define CMD_BLINK		0x30
 	#define CMD_RANDOM		0x40
 
@@ -55,9 +56,6 @@
 	size_t frame_len;
 	bool IN_FRAME = false;
 	bool ESCAPE = false;
-	bool SERIAL_READING = false;
 	uint8_t command = CMD_UNKNOWN;
-	uint32_t last_serial_read = 0;
-	uint32_t serial_read_timeout_ms = 60;
 
 #endif

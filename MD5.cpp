@@ -6,7 +6,7 @@ MD5::MD5()
 	return;
 }
 
-char* MD5::make_digest(const unsigned char *digest, int len) /* {{{ */
+char* IRAM_ATTR MD5::make_digest(const unsigned char *digest, int len) /* {{{ */
 {
 	char * md5str = (char*) malloc(sizeof(char)*(len*2+1));
 	static const char hexits[17] = "0123456789abcdef";
@@ -69,7 +69,7 @@ char* MD5::make_digest(const unsigned char *digest, int len) /* {{{ */
  * This processes one or more 64-byte data blocks, but does NOT update
  * the bit counters.  There are no alignment requirements.
  */
-const void *MD5::body(void *ctxBuf, const void *data, size_t size)
+const void IRAM_ATTR *MD5::body(void *ctxBuf, const void *data, size_t size)
 {
 	MD5_CTX *ctx = (MD5_CTX*)ctxBuf;
 	const unsigned char *ptr;
@@ -179,7 +179,7 @@ const void *MD5::body(void *ctxBuf, const void *data, size_t size)
 	return ptr;
 }
 
-void MD5::MD5Init(void *ctxBuf)
+void IRAM_ATTR MD5::MD5Init(void *ctxBuf)
 {
 	MD5_CTX *ctx = (MD5_CTX*)ctxBuf;
 	ctx->a = 0x67452301;
@@ -194,7 +194,7 @@ void MD5::MD5Init(void *ctxBuf)
     memset(ctx->buffer, 0, sizeof(ctx->buffer));
 }
 
-void MD5::MD5Update(void *ctxBuf, const void *data, size_t size)
+void IRAM_ATTR MD5::MD5Update(void *ctxBuf, const void *data, size_t size)
 {
 	MD5_CTX *ctx = (MD5_CTX*)ctxBuf;
 	MD5_u32plus saved_lo;
@@ -230,7 +230,7 @@ void MD5::MD5Update(void *ctxBuf, const void *data, size_t size)
 	memcpy(ctx->buffer, data, size);
 }
 
-void MD5::MD5Final(unsigned char *result, void *ctxBuf)
+void IRAM_ATTR MD5::MD5Final(unsigned char *result, void *ctxBuf)
 {
 	MD5_CTX *ctx = (MD5_CTX*)ctxBuf;
 	MD5_u32plus used, free;
@@ -281,7 +281,7 @@ void MD5::MD5Final(unsigned char *result, void *ctxBuf)
 
 	memset(ctx, 0, sizeof(*ctx));
 }
-unsigned char* MD5::make_hash(char *arg)
+unsigned char* IRAM_ATTR MD5::make_hash(char *arg)
 {
 	MD5_CTX context;
 	unsigned char * hash = (unsigned char *) malloc(16);
@@ -290,7 +290,7 @@ unsigned char* MD5::make_hash(char *arg)
 	MD5Final(hash, &context);
 	return hash;
 }
-unsigned char* MD5::make_hash(char *arg,size_t size)
+unsigned char* IRAM_ATTR MD5::make_hash(char *arg,size_t size)
 {
 	MD5_CTX context;
 	unsigned char * hash = (unsigned char *) malloc(16);
