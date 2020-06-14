@@ -3,7 +3,7 @@
 ## WARNING
 
 This is a port of the RNode firmware developed by Mark Qvist to ESP 32
-microprocessors. I developed the port on a Heltec ESP32 Lora (V2).
+microprocessors. I developed the port on a Heltec ESP32 Wifi Lora (V2).
 
 It's not complete yet (some parts like reading RSSI values have been
 disabled and needs fixing). But I was able to run a SSH connection between
@@ -25,6 +25,11 @@ in mind that I am not an expert in microprocessor programming.
 This port in only suitable for ESP32s. I tried to keep it portable, but
 too much is different on a ESP32 compared to the ATmega1284p Mark uses.
 
+Due to a [possible bug](https://github.com/xoseperez/eeprom32_rotate/issues/7) in the EEPROM
+libraries, you need a pretty old version of the ESP libraries to get a working
+binary.
+
+A precompiled version of the code for Heltec ESP32 Wifi Lora (V2) is included.
 
 ## Original documentation follows
 
