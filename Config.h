@@ -34,8 +34,11 @@
     // ESP32 PWM channels
     const int ch_led_rx = 0;
     const int ch_led_tx = 1;
-
-		const int pin_cs = SS;//18;
+    #if defined(ESP32)
+		  const int pin_cs = 18;
+    #else
+      const int pin_cs = SS;
+    #endif
 		const int pin_reset = 23;
 		const int pin_dio = 26;
 		const int pin_led_rx = 25;

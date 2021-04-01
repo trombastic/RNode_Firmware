@@ -6,13 +6,19 @@
 
 #include <Arduino.h>
 #include <SPI.h>
-
-#define LORA_DEFAULT_SS_PIN    10
-#define LORA_DEFAULT_RESET_PIN 9
-#define LORA_DEFAULT_DIO0_PIN  2
-
-#define PA_OUTPUT_RFO_PIN      0
-#define PA_OUTPUT_PA_BOOST_PIN 1
+#if defined(__AVR_ATmega1284P__)
+    #define LORA_DEFAULT_SS_PIN    10
+    #define LORA_DEFAULT_RESET_PIN 9
+    #define LORA_DEFAULT_DIO0_PIN  2
+    #define PA_OUTPUT_RFO_PIN      0
+    #define PA_OUTPUT_PA_BOOST_PIN 1
+  #elif defined(ESP32)
+      #define LORA_DEFAULT_SS_PIN    18
+      #define LORA_DEFAULT_RESET_PIN 14
+      #define LORA_DEFAULT_DIO0_PIN  26
+      #define PA_OUTPUT_RFO_PIN      0
+      #define PA_OUTPUT_PA_BOOST_PIN 1
+  #endif
 
 class LoRaClass : public Stream {
 public:

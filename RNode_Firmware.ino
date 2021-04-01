@@ -2,7 +2,10 @@
 #include <SPI.h>
 #ifdef ESP32
 hw_timer_t * timer = NULL;
+portMUX_TYPE timerMux = portMUX_INITIALIZER_UNLOCKED;
 #endif
+
+#include <Preferences.h>
 
 #include "Utilities.h"
 
@@ -33,15 +36,15 @@ void setup() {
   randomSeed(analogRead(0));
   Serial.begin(serial_baudrate);
   while (!Serial);
-
+  //Serial.println("Ready");
   #if defined(ESP32)
-    
-//    EEPROMr.add_by_name("eeprom");
-//    EEPROMr.offset(0xFF0);
-//    EEPROMr.begin(EEPROM_SIZE);
-
-  EEPROM.begin(EEPROM_SIZE);
-
+    #ifndef preferences_loaded
+      Preferences preferences;
+      preferences.begin("RNode", false);
+      #define preferences_loaded;
+    #endif
+    pinMode(Vext,OUTPUT);
+    digitalWrite(Vext, LOW);
   #endif
   // Initialise serial communication
   memset(serialBuffer, 0, sizeof(serialBuffer));
@@ -55,7 +58,7 @@ void setup() {
   // Initialise buffers
   memset(pbuf, 0, sizeof(pbuf));
   memset(cbuf, 0, sizeof(cbuf));
-
+  
   memset(packet_queue, 0, sizeof(packet_queue));
 
   memset(packet_starts_buf, 0, sizeof(packet_starts_buf));
@@ -78,7 +81,8 @@ void setup() {
 }
 
 void IRAM_ATTR receiveCallback(int packet_size) {
-  timerStop(timer);
+  //timerStop(timer);
+  portENTER_CRITICAL_ISR(&timerMux);
   if (!promisc) {
     // The standard operating mode allows large
     // packets with a payload up to 500 bytes,
@@ -190,7 +194,8 @@ void IRAM_ATTR receiveCallback(int packet_size) {
     Serial.write(FEND);
     read_len = 0;
   }
-  timerRestart(timer);
+  //timerRestart(timer);
+  portEXIT_CRITICAL_ISR(&timerMux);
 }
 
 bool startRadio() {
@@ -531,7 +536,7 @@ void serialCallback(uint8_t sbyte) {
         eeprom_write(cbuf[0], cbuf[1]);
       }
     } else if (command == CMD_ROM_COMMIT) {
-      eeprom_commit();
+      //eeprom_commit();
     } else if (command == CMD_FW_VERSION) {
       kiss_indicate_version();
     } else if (command == CMD_CONF_SAVE) {
@@ -596,20 +601,24 @@ void checkModemStatus() {
 void validateStatus() {
   if (eeprom_lock_set()) {
     if (eeprom_product_valid() && eeprom_model_valid() && eeprom_hwrev_valid()) {
+      Serial.println("product_valid");
       if (eeprom_checksum_valid()) {
         hw_ready = true;
-
+        Serial.println("checksum_valid");
         if (eeprom_have_conf()) {
           eeprom_conf_load();
           op_mode = MODE_TNC;
           startRadio();
+          Serial.println("hw_ready");
         }
       }
     } else {
       hw_ready = false;
+      Serial.println("hw not ready");
     }
   } else {
     hw_ready = false;
+    Serial.println("eeprom_lock_set");
   }
 }
 
@@ -649,41 +658,39 @@ void loop() {
 //#if defined(ESP32)
 //  yield();
 //#endif
-
+  buffer_serial(); //todo find the actual problem with the timer ISR
   if (!fifo_isempty_locked(&serialFIFO)) serial_poll();
 }
 
 volatile bool serial_polling = false;
 void serial_poll() {
   serial_polling = true;
-
   while (!fifo_isempty_locked(&serialFIFO)) {
     char sbyte = fifo_pop(&serialFIFO);
     serialCallback(sbyte);
   }
-
   serial_polling = false;
 }
 
 #define MAX_CYCLES 20
-// #if defined(ESP32)
-void IRAM_ATTR buffer_serial() {
-  //#else
-  //void buffer_serial() {
-  //#endif
+//#if defined(ESP32)
+//void IRAM_ATTR buffer_serial() {
+//#else
+void buffer_serial() {
+//#endif
+  portENTER_CRITICAL_ISR(&timerMux);
   if (!serial_buffering) {
     serial_buffering = true;
     uint8_t c = 0;
     while (c < MAX_CYCLES && Serial.available()) {
       c++;
-
       if (!fifo_isfull_locked(&serialFIFO)) {
         fifo_push_locked(&serialFIFO, Serial.read());
       }
    }
     serial_buffering = false;
   }
-
+  portEXIT_CRITICAL_ISR(&timerMux);
 }
 
 
