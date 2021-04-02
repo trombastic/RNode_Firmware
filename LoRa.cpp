@@ -218,16 +218,28 @@ uint8_t LoRaClass::packetRssiRaw() {
 }
 
 int LoRaClass::packetRssi() {
-  int pkt_rssi = (int)readRegister(REG_PKT_RSSI_VALUE);
-  // TODO: change this to look at the actual model code
+  int pkt_rssi = (int)readRegister(REG_PKT_RSSI_VALUE) - RSSI_OFFSET;
+  int pkt_snr = packetSnr();
+
   if (_frequency < 820E6) pkt_rssi -= 7;
-  pkt_rssi -= 157;
+
+  if (pkt_snr < 0) {
+    pkt_rssi += pkt_snr;
+  } else {
+    // Slope correction is (16/15)*pkt_rssi,
+    // this estimation looses one floating point
+    // operation, and should be precise enough.
+    pkt_rssi = (int)(1.066 * pkt_rssi);
+  }
 
   return pkt_rssi;
 }
 
-float LoRaClass::packetSnr()
-{
+uint8_t LoRaClass::packetSnrRaw() {
+  return readRegister(REG_PKT_SNR_VALUE);
+}
+
+float LoRaClass::packetSnr() {
   return ((int8_t)readRegister(REG_PKT_SNR_VALUE)) * 0.25;
 }
 
@@ -356,8 +368,7 @@ void LoRaClass::sleep()
   writeRegister(REG_OP_MODE, MODE_LONG_RANGE_MODE | MODE_SLEEP);
 }
 
-void LoRaClass::setTxPower(int level, int outputPin)
-{
+void LoRaClass::setTxPower(int level, int outputPin) {
   if (PA_OUTPUT_RFO_PIN == outputPin) {
     // RFO
     if (level < 0) {
@@ -367,6 +378,7 @@ void LoRaClass::setTxPower(int level, int outputPin)
     }
 
     writeRegister(REG_PA_CONFIG, 0x70 | level);
+
   } else {
     // PA BOOST
     if (level < 2) {

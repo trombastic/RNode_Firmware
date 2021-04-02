@@ -1,7 +1,4 @@
 #include <stddef.h>
-#ifndef ESP32
-#include <util/atomic.h>
-#endif
 #include "LoRa.h"
 #include "ROM.h"
 #include "Config.h"
@@ -12,13 +9,8 @@
   Preferences preferences;
 #else
   #include <EEPROM.h>
+  #include <util/atomic.h>
 #endif
-
-//#if defined(ESP32)
-//#include <EEPROM32_Rotate.h>
-//#endif
-//
-//EEPROM32_Rotate EEPROMr;
 
 void led_rx_on()  { digitalWrite(pin_led_rx, HIGH); }
 void led_rx_off() {	digitalWrite(pin_led_rx, LOW); }
@@ -84,7 +76,7 @@ void led_indicate_standby() {
 			led_standby_direction = -1;
 		}
 		led_standby_value += led_standby_direction;
-		//analogWrite(pin_led_rx, led_standby_value);		
+		analogWrite(pin_led_rx, led_standby_value);
 		digitalWrite(pin_led_tx, 0);
 	}
 }
@@ -99,33 +91,32 @@ void led_indicate_not_ready() {
 			led_standby_direction = -1;
 		}
 		led_standby_value += led_standby_direction;
-
-		//analogWrite(pin_led_tx, led_standby_value);		
+		analogWrite(pin_led_tx, led_standby_value);
 		digitalWrite(pin_led_rx, 0);
 	}
 }
 
 void escapedSerialWrite(uint8_t byte) {
-	 if (byte == FEND) { Serial.write(FESC); byte = TFEND; }
-   if (byte == FESC) { Serial.write(FESC); byte = TFESC; }
+	if (byte == FEND) { Serial.write(FESC); byte = TFEND; }
+    if (byte == FESC) { Serial.write(FESC); byte = TFESC; }
     Serial.write(byte);
 }
 
-void IRAM_ATTR kiss_indicate_error(uint8_t error_code) {
+void kiss_indicate_error(uint8_t error_code) {
 	Serial.write(FEND);
 	Serial.write(CMD_ERROR);
 	Serial.write(error_code);
 	Serial.write(FEND);
 }
 
-void IRAM_ATTR kiss_indicate_radiostate() {
+void kiss_indicate_radiostate() {
 	Serial.write(FEND);
 	Serial.write(CMD_RADIO_STATE);
 	Serial.write(radio_online);
 	Serial.write(FEND);
 }
 
-void IRAM_ATTR kiss_indicate_stat_rx() {
+void kiss_indicate_stat_rx() {
 	Serial.write(FEND);
 	Serial.write(CMD_STAT_RX);
 	escapedSerialWrite(stat_rx>>24);
@@ -135,7 +126,7 @@ void IRAM_ATTR kiss_indicate_stat_rx() {
 	Serial.write(FEND);
 }
 
-void IRAM_ATTR kiss_indicate_stat_tx() {
+void kiss_indicate_stat_tx() {
 	Serial.write(FEND);
 	Serial.write(CMD_STAT_TX);
 	escapedSerialWrite(stat_tx>>24);
@@ -145,7 +136,7 @@ void IRAM_ATTR kiss_indicate_stat_tx() {
 	Serial.write(FEND);
 }
 
-void IRAM_ATTR kiss_indicate_stat_rssi() {
+void kiss_indicate_stat_rssi() {
 	uint8_t packet_rssi_val = (uint8_t)(last_rssi+rssi_offset);
 	Serial.write(FEND);
 	Serial.write(CMD_STAT_RSSI);
@@ -153,42 +144,49 @@ void IRAM_ATTR kiss_indicate_stat_rssi() {
 	Serial.write(FEND);
 }
 
-void IRAM_ATTR kiss_indicate_stat_snr() {
+void kiss_indicate_stat_snr() {
 	Serial.write(FEND);
 	Serial.write(CMD_STAT_SNR);
 	escapedSerialWrite(last_snr_raw);
 	Serial.write(FEND);
 }
 
-void IRAM_ATTR kiss_indicate_radio_lock() {
+void kiss_indicate_radio_lock() {
 	Serial.write(FEND);
 	Serial.write(CMD_RADIO_LOCK);
 	Serial.write(radio_locked);
 	Serial.write(FEND);
 }
 
-void IRAM_ATTR kiss_indicate_spreadingfactor() {
+void kiss_indicate_spreadingfactor() {
 	Serial.write(FEND);
 	Serial.write(CMD_SF);
 	Serial.write((uint8_t)lora_sf);
 	Serial.write(FEND);
 }
 
-void IRAM_ATTR kiss_indicate_codingrate() {
+void kiss_indicate_codingrate() {
 	Serial.write(FEND);
 	Serial.write(CMD_CR);
 	Serial.write((uint8_t)lora_cr);
 	Serial.write(FEND);
 }
 
-void IRAM_ATTR kiss_indicate_txpower() {
+void kiss_indicate_implicit_length() {
+	Serial.write(FEND);
+	Serial.write(CMD_IMPLICIT);
+	Serial.write(implicit_l);
+	Serial.write(FEND);
+}
+
+void kiss_indicate_txpower() {
 	Serial.write(FEND);
 	Serial.write(CMD_TXPOWER);
 	Serial.write((uint8_t)lora_txp);
 	Serial.write(FEND);
 }
 
-void IRAM_ATTR kiss_indicate_bandwidth() {
+void kiss_indicate_bandwidth() {
 	Serial.write(FEND);
 	Serial.write(CMD_BANDWIDTH);
 	escapedSerialWrite(lora_bw>>24);
@@ -198,7 +196,7 @@ void IRAM_ATTR kiss_indicate_bandwidth() {
 	Serial.write(FEND);
 }
 
-void IRAM_ATTR kiss_indicate_frequency() {
+void kiss_indicate_frequency() {
 	Serial.write(FEND);
 	Serial.write(CMD_FREQUENCY);
 	escapedSerialWrite(lora_freq>>24);
@@ -208,28 +206,28 @@ void IRAM_ATTR kiss_indicate_frequency() {
 	Serial.write(FEND);
 }
 
-void IRAM_ATTR kiss_indicate_random(uint8_t byte) {
+void kiss_indicate_random(uint8_t byte) {
 	Serial.write(FEND);
 	Serial.write(CMD_RANDOM);
 	Serial.write(byte);
 	Serial.write(FEND);
 }
 
-void IRAM_ATTR kiss_indicate_ready() {
+void kiss_indicate_ready() {
 	Serial.write(FEND);
 	Serial.write(CMD_READY);
 	Serial.write(0x01);
 	Serial.write(FEND);
 }
 
-void IRAM_ATTR kiss_indicate_not_ready() {
+void kiss_indicate_not_ready() {
 	Serial.write(FEND);
 	Serial.write(CMD_READY);
 	Serial.write(0x00);
 	Serial.write(FEND);
 }
 
-void IRAM_ATTR kiss_indicate_promisc() {
+void kiss_indicate_promisc() {
 	Serial.write(FEND);
 	Serial.write(CMD_PROMISC);
 	if (promisc) {
@@ -240,14 +238,14 @@ void IRAM_ATTR kiss_indicate_promisc() {
 	Serial.write(FEND);
 }
 
-void IRAM_ATTR kiss_indicate_detect() {
+void kiss_indicate_detect() {
 	Serial.write(FEND);
 	Serial.write(CMD_DETECT);
 	Serial.write(DETECT_RESP);
 	Serial.write(FEND);
 }
 
-void IRAM_ATTR kiss_indicate_version() {
+void kiss_indicate_version() {
 	Serial.write(FEND);
 	Serial.write(CMD_FW_VERSION);
 	Serial.write(MAJ_VERS);
@@ -277,11 +275,20 @@ void setCodingRate() {
 	if (radio_online) LoRa.setCodingRate4(lora_cr);
 }
 
+void set_implicit_length(uint8_t len) {
+	implicit_l = len;
+	if (implicit_l != 0) {
+		implicit = true;
+	} else {
+		implicit = false;
+	}
+}
+
 void setTXPower() {
 	if (radio_online) {
 		if (model == MODEL_A4) LoRa.setTxPower(lora_txp, PA_OUTPUT_RFO_PIN);
 		if (model == MODEL_A9) LoRa.setTxPower(lora_txp, PA_OUTPUT_PA_BOOST_PIN);
-   if (model == MODEL_B1) LoRa.setTxPower(lora_txp, PA_OUTPUT_RFO_PIN);
+   		if (model == MODEL_B1) LoRa.setTxPower(lora_txp, PA_OUTPUT_RFO_PIN);
 	}
 }
 
@@ -373,8 +380,11 @@ void eeprom_dump_all() {
 		escapedSerialWrite(byte);
 	}
 }
-
+#if defined(ESP32)
 void IRAM_ATTR kiss_dump_eeprom() {
+#else
+void kiss_dump_eeprom() {
+#endif
 	Serial.write(FEND);
 	Serial.write(CMD_ROM_READ);
 	eeprom_dump_all();
@@ -394,15 +404,14 @@ void eeprom_write(uint8_t addr, uint8_t byte) {
 }
 
 void eeprom_erase() {
-  #if defined(ESP32)
-        //EEPROM.write(eeprom_addr(addr), 0xFF);
-        preferences.clear();
-  #else
-  	for (int addr = 0; addr < EEPROM_RESERVED; addr++) {
-  			EEPROM.update(eeprom_addr(addr), 0xFF);
-  	}
-  #endif
-	//while (true) { led_tx_on(); led_rx_off(); }
+	for (int addr = 0; addr < EEPROM_RESERVED; addr++) {
+        #if defined(ESP32)
+            preferences.putChar("EEPROM_"+eeprom_addr(addr), byte);
+	#else		
+            EEPROM.update(eeprom_addr(addr), 0xFF);
+        #endif
+	}
+	while (true) { led_tx_on(); led_rx_off(); }
 }
 
 bool eeprom_lock_set() {
@@ -464,7 +473,6 @@ bool eeprom_hwrev_valid() {
 	} else {
 		return false;
 	}
- 
 }
 
 bool eeprom_checksum_valid() {
@@ -491,6 +499,7 @@ bool eeprom_checksum_valid() {
 			checksum_valid = false;
 		}
 	}
+
 	free(hash);
 	free(data);
  #if defined(ESP32)

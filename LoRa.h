@@ -1,5 +1,8 @@
 // Copyright (c) Sandeep Mistry. All rights reserved.
-// Licensed under the MIT license. See LICENSE file in the project root for full license information.
+// Licensed under the MIT license.
+
+// Modifications and additions copyright 2018 by Mark Qvist
+// Obviously still under the MIT license.
 
 #ifndef LORA_H
 #define LORA_H
@@ -20,6 +23,8 @@
       #define PA_OUTPUT_PA_BOOST_PIN 1
   #endif
 
+#define RSSI_OFFSET 157
+
 class LoRaClass : public Stream {
 public:
   LoRaClass();
@@ -33,6 +38,7 @@ public:
   int parsePacket(int size = 0);
   int packetRssi();
   uint8_t packetRssiRaw();
+  uint8_t packetSnrRaw();
   float packetSnr();
   long packetFrequencyError();
 

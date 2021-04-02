@@ -4,8 +4,9 @@
 	#define CONFIG_H
 
 	#define MAJ_VERS  0x01
-	#define MIN_VERS  0x10
+	#define MIN_VERS  0x11
 
+	#define MCU_328P  0x90
 	#define MCU_1284P 0x91
   	#define MCU_ESP32 0x92
 
@@ -16,8 +17,8 @@
 		#define MCU_VARIANT MCU_1284P
 		#warning "Firmware is being compiled for atmega1284p based boards"
 	#elif defined(ESP32)
-    	#define MCU_VARIANT MCU_ESP32
-    	#warning "Firmware is being compiled for esp32 based boards"
+    		#define MCU_VARIANT MCU_ESP32
+    		#warning "Firmware is being compiled for esp32 based boards"
 	#else
 		#error "The firmware cannot be compiled for the selected MCU variant"
 	#endif
@@ -31,25 +32,35 @@
 
 	// MCU dependent configuration parameters
 
-    // ESP32 PWM channels
-    const int ch_led_rx = 0;
-    const int ch_led_tx = 1;
-    #if defined(ESP32)
-		  const int pin_cs = 18;
-    #else
-      const int pin_cs = SS;
-    #endif
+	#if MCU_VARIANT == MCU_1284P
+		const int pin_cs = 4;
+		const int pin_reset = 3;
+		const int pin_dio = 2;
+		const int pin_led_rx = 12;
+		const int pin_led_tx = 13;
+
+		// TODO: Reset
+		#define CONFIG_UART_BUFFER_SIZE 6144
+		#define CONFIG_QUEUE_SIZE 6144
+		#define CONFIG_QUEUE_MAX_LENGTH 250
+
+		#define EEPROM_SIZE 4096
+		#define EEPROM_OFFSET EEPROM_SIZE-EEPROM_RESERVED
+	#elif MCU_VARIANT == MCU_ESP32
+		const int pin_cs = 18;
 		const int pin_reset = 23;
 		const int pin_dio = 26;
 		const int pin_led_rx = 25;
 		const int pin_led_tx = 25;
 
-    #define CONFIG_UART_BUFFER_SIZE 6144
-    #define CONFIG_QUEUE_SIZE 6144
-    #define CONFIG_QUEUE_MAX_LENGTH 250
+		// TODO: Reset
+		#define CONFIG_UART_BUFFER_SIZE 6144
+		#define CONFIG_QUEUE_SIZE 6144
+		#define CONFIG_QUEUE_MAX_LENGTH 250
 
-		#define EEPROM_SIZE 512
+		#define EEPROM_SIZE 4096
 		#define EEPROM_OFFSET EEPROM_SIZE-EEPROM_RESERVED
+	#endif
 
 	#define eeprom_addr(a) (a+EEPROM_OFFSET)
 
@@ -69,10 +80,12 @@
 	uint32_t lora_freq = 0;
 
 	// Operational variables
-	bool radio_locked = true;
-	bool radio_online = false;
-	bool hw_ready     = false;
-	bool promisc      = false;
+	bool radio_locked  = true;
+	bool radio_online  = false;
+	bool hw_ready      = false;
+	bool promisc       = false;
+	bool implicit      = false;
+	uint8_t implicit_l = 0;
 
 	uint8_t op_mode   = MODE_HOST;
 	uint8_t model     = 0x00;
