@@ -1,12 +1,11 @@
 #include <Arduino.h>
 #include <SPI.h>
-#include "Utilities.h"
 #ifdef ESP32
-hw_timer_t * timer = NULL;
-portMUX_TYPE timerMux = portMUX_INITIALIZER_UNLOCKED;
-#include <Preferences.h>
+  hw_timer_t * timer = NULL;
+  portMUX_TYPE timerMux = portMUX_INITIALIZER_UNLOCKED;
+  #include <Preferences.h>
 #endif
-
+#include "Utilities.h"
 FIFOBuffer serialFIFO;
 uint8_t serialBuffer[CONFIG_UART_BUFFER_SIZE+1];
 
@@ -645,7 +644,12 @@ void serial_poll() {
 }
 
 #define MAX_CYCLES 20
+#ifdef ESP32
+void IRAM_ATTR buffer_serial() {
+  portENTER_CRITICAL_ISR(&timerMux);
+#else
 void buffer_serial() {
+#endif
   if (!serial_buffering) {
     serial_buffering = true;
 
@@ -660,8 +664,19 @@ void buffer_serial() {
 
     serial_buffering = false;
   }
+  #ifdef ESP32
+  portEXIT_CRITICAL_ISR(&timerMux);
+  #endif
 }
 
+#ifdef ESP32
+void serial_interrupt_init() {
+    timer = timerBegin(0, 80, true);
+    timerAttachInterrupt(timer, &buffer_serial, true);
+    timerAlarmWrite(timer, 1000, true);
+    timerAlarmEnable(timer);
+}
+#else
 void serial_interrupt_init() {
   TCCR3A = 0;
   TCCR3B = _BV(CS10) |
@@ -677,3 +692,4 @@ void serial_interrupt_init() {
 ISR(TIMER3_CAPT_vect) {
   buffer_serial();
 }
+#endif

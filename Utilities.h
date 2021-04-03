@@ -76,7 +76,9 @@ void led_indicate_standby() {
 			led_standby_direction = -1;
 		}
 		led_standby_value += led_standby_direction;
+    #ifndef ESP32
 		analogWrite(pin_led_rx, led_standby_value);
+    #endif
 		digitalWrite(pin_led_tx, 0);
 	}
 }
@@ -91,7 +93,9 @@ void led_indicate_not_ready() {
 			led_standby_direction = -1;
 		}
 		led_standby_value += led_standby_direction;
+    #ifndef ESP32
 		analogWrite(pin_led_tx, led_standby_value);
+    #endif
 		digitalWrite(pin_led_rx, 0);
 	}
 }
@@ -288,7 +292,7 @@ void setTXPower() {
 	if (radio_online) {
 		if (model == MODEL_A4) LoRa.setTxPower(lora_txp, PA_OUTPUT_RFO_PIN);
 		if (model == MODEL_A9) LoRa.setTxPower(lora_txp, PA_OUTPUT_PA_BOOST_PIN);
-   		if (model == MODEL_B1) LoRa.setTxPower(lora_txp, PA_OUTPUT_RFO_PIN);
+   	if (model == MODEL_B1) LoRa.setTxPower(lora_txp, PA_OUTPUT_RFO_PIN);
 	}
 }
 
@@ -337,7 +341,7 @@ void promisc_disable() {
 
 bool eeprom_info_locked() {
   #if defined(ESP32)
-  uint8_t lock_byte = preferences.getChar("EEPROM_"+eeprom_addr(ADDR_INFO_LOCK), 0);
+    uint8_t lock_byte = preferences.getChar("EEPROM_"+eeprom_addr(ADDR_INFO_LOCK), 0);
   #else
 	  uint8_t lock_byte = EEPROM.read(eeprom_addr(ADDR_INFO_LOCK));
   #endif
@@ -380,11 +384,8 @@ void eeprom_dump_all() {
 		escapedSerialWrite(byte);
 	}
 }
-#if defined(ESP32)
-void IRAM_ATTR kiss_dump_eeprom() {
-#else
+
 void kiss_dump_eeprom() {
-#endif
 	Serial.write(FEND);
 	Serial.write(CMD_ROM_READ);
 	eeprom_dump_all();
@@ -405,9 +406,9 @@ void eeprom_write(uint8_t addr, uint8_t byte) {
 
 void eeprom_erase() {
 	for (int addr = 0; addr < EEPROM_RESERVED; addr++) {
-        #if defined(ESP32)
-            preferences.putChar("EEPROM_"+eeprom_addr(addr), byte);
-	#else		
+        #ifdef ESP32
+            preferences.putChar("EEPROM_"+eeprom_addr(addr), 0xFF);
+	      #else		
             EEPROM.update(eeprom_addr(addr), 0xFF);
         #endif
 	}
