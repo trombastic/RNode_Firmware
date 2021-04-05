@@ -4,10 +4,7 @@
 #include "Config.h"
 #include "Framing.h"
 #include "MD5.h"
-#if defined(ESP32)
-  #include <Preferences.h>
-  Preferences preferences;
-#else
+#ifndef ESP32
   #include <EEPROM.h>
   #include <util/atomic.h>
 #endif
@@ -16,6 +13,20 @@ void led_rx_on()  { digitalWrite(pin_led_rx, HIGH); }
 void led_rx_off() {	digitalWrite(pin_led_rx, LOW); }
 void led_tx_on()  { digitalWrite(pin_led_tx, HIGH); }
 void led_tx_off() { digitalWrite(pin_led_tx, LOW); }
+
+#ifdef ESP32
+void draw_info(String text, uint8_t line, bool draw_now){
+  uint8_t line_high = 9;
+  display.fillRect(2, (line*line_high), display.width()-2, line_high, SSD1306_BLACK); // clear Line
+  display.setCursor(2, line*line_high); // oled display
+  display.setTextSize(0);
+  display.setTextColor(SSD1306_WHITE);
+  display.println(text);
+  if(draw_now){
+    display.display(); // drawing commands to make them visible on screen!
+  }
+}
+#endif
 
 void led_indicate_error(int cycles) {
 	bool forever = (cycles == 0) ? true : false;
@@ -102,8 +113,8 @@ void led_indicate_not_ready() {
 
 void escapedSerialWrite(uint8_t byte) {
 	if (byte == FEND) { Serial.write(FESC); byte = TFEND; }
-    if (byte == FESC) { Serial.write(FESC); byte = TFESC; }
-    Serial.write(byte);
+  if (byte == FESC) { Serial.write(FESC); byte = TFESC; }
+  Serial.write(byte);
 }
 
 void kiss_indicate_error(uint8_t error_code) {
@@ -273,10 +284,12 @@ void getPacketData(int len) {
 
 void setSpreadingFactor() {
 	if (radio_online) LoRa.setSpreadingFactor(lora_sf);
+  draw_info("sf: "+String(lora_sf),4,true);
 }
 
 void setCodingRate() {
 	if (radio_online) LoRa.setCodingRate4(lora_cr);
+  draw_info("cr: "+String(lora_cr),5,true);
 }
 
 void set_implicit_length(uint8_t len) {
@@ -293,6 +306,7 @@ void setTXPower() {
 		if (model == MODEL_A4) LoRa.setTxPower(lora_txp, PA_OUTPUT_RFO_PIN);
 		if (model == MODEL_A9) LoRa.setTxPower(lora_txp, PA_OUTPUT_PA_BOOST_PIN);
    	if (model == MODEL_B1) LoRa.setTxPower(lora_txp, PA_OUTPUT_RFO_PIN);
+    draw_info("txp: "+String(lora_txp),3,true);
 	}
 }
 
@@ -307,6 +321,7 @@ void setBandwidth() {
 	if (radio_online) {
 		LoRa.setSignalBandwidth(lora_bw);
 		getBandwidth();
+    draw_info("bw: "+String(lora_bw),1,true);
 	}
 }
 
@@ -320,6 +335,7 @@ void setFrequency() {
 	if (radio_online) {
 		LoRa.setFrequency(lora_freq);
 		getFrequency();
+    draw_info("freq: "+String(lora_freq),2,true);
 	}
 }
 
@@ -341,7 +357,7 @@ void promisc_disable() {
 
 bool eeprom_info_locked() {
   #if defined(ESP32)
-    uint8_t lock_byte = preferences.getChar("EEPROM_"+eeprom_addr(ADDR_INFO_LOCK), 0);
+    uint8_t lock_byte = preferences.getChar("EEPROM_"+eeprom_addr(ADDR_INFO_LOCK), 0x00);
   #else
 	  uint8_t lock_byte = EEPROM.read(eeprom_addr(ADDR_INFO_LOCK));
   #endif
@@ -512,7 +528,7 @@ bool eeprom_checksum_valid() {
 
 bool eeprom_have_conf() {
   #if defined(ESP32)
-  uint8_t CONF_OK = preferences.getChar("EEPROM_"+eeprom_addr(ADDR_CONF_OK), 0);
+  uint8_t CONF_OK = preferences.getChar("EEPROM_"+eeprom_addr(ADDR_CONF_OK), 0x00);
   if (CONF_OK == CONF_OK_BYTE) {
     return true;
   } else {
@@ -531,7 +547,7 @@ void eeprom_conf_load() {
 	if (eeprom_have_conf()) {
   #if defined(ESP32)
     lora_sf = preferences.getChar("EEPROM_"+eeprom_addr(ADDR_CONF_SF),lora_sf);
-    lora_sf = preferences.getChar("EEPROM_"+eeprom_addr(ADDR_CONF_CR),lora_sf);
+    lora_cr = preferences.getChar("EEPROM_"+eeprom_addr(ADDR_CONF_CR),lora_cr);
     lora_txp = preferences.getChar("EEPROM_"+eeprom_addr(ADDR_CONF_TXP),lora_txp);
     lora_freq = (uint32_t)preferences.getChar("EEPROM_"+eeprom_addr(ADDR_CONF_FREQ)+0x00,lora_freq>>24) << 24 | (uint32_t)preferences.getChar("EEPROM_"+eeprom_addr(ADDR_CONF_FREQ)+0x01,lora_freq>>16) << 16 | (uint32_t)preferences.getChar("EEPROM_"+eeprom_addr(ADDR_CONF_FREQ)+0x02,lora_freq>>8) << 8 | (uint32_t)preferences.getChar("EEPROM_"+eeprom_addr(ADDR_CONF_FREQ)+0x03,lora_freq);
     lora_bw = (uint32_t)preferences.getChar("EEPROM_"+eeprom_addr(ADDR_CONF_BW)+0x00,lora_bw>>24) << 24 | (uint32_t)preferences.getChar("EEPROM_"+eeprom_addr(ADDR_CONF_BW)+0x01,lora_bw>>16) << 16 | (uint32_t)preferences.getChar("EEPROM_"+eeprom_addr(ADDR_CONF_BW)+0x02,lora_bw>>8) << 8 | (uint32_t)preferences.getChar("EEPROM_"+eeprom_addr(ADDR_CONF_BW)+0x03,lora_bw);

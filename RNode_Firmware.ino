@@ -1,9 +1,25 @@
 #include <Arduino.h>
 #include <SPI.h>
+#include <Wire.h>
 #ifdef ESP32
+  #include <Wire.h>
+  #include <Adafruit_GFX.h>
+  #include <Adafruit_SSD1306.h>
+
+  #define SCREEN_WIDTH 128 // OLED display width, in pixels
+  #define SCREEN_HEIGHT 64 // OLED display height, in pixels
   hw_timer_t * timer = NULL;
   portMUX_TYPE timerMux = portMUX_INITIALIZER_UNLOCKED;
   #include <Preferences.h>
+  Preferences preferences;
+  #define OLED_RESET   16 // Reset pin # (or -1 if sharing Arduino reset pin)
+  #define OLED_SDA     4 // Reset pin # (or -1 if sharing Arduino reset pin)
+  #define OLED_SCL     15 // Reset pin # (or -1 if sharing Arduino reset pin)
+  
+  #define SCREEN_ADDRESS 0x3C ///< See datasheet for Address; 0x3D for 128x64, 0x3C for 128x32
+  TwoWire twi = TwoWire(1); // create our own TwoWire instance
+  Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &twi, OLED_RESET);
+
 #endif
 #include "Utilities.h"
 FIFOBuffer serialFIFO;
@@ -34,15 +50,28 @@ void setup() {
   fifo_init(&serialFIFO, serialBuffer, CONFIG_UART_BUFFER_SIZE);
 
   Serial.begin(serial_baudrate);
-  while (!Serial);
+  
   #if defined(ESP32)
-    #ifndef preferences_loaded
-      Preferences preferences;
-      preferences.begin("RNode", false);
-      #define preferences_loaded;
-    #endif
+    preferences.begin("RNode", false);
     pinMode(Vext,OUTPUT);
     digitalWrite(Vext, LOW);
+    twi.begin(OLED_SDA,OLED_SCL);
+    // SSD1306_SWITCHCAPVCC = generate display voltage from 3.3V internally
+    if(!display.begin(SSD1306_SWITCHCAPVCC, SCREEN_ADDRESS)) {
+      Serial.println(F("SSD1306 allocation failed"));
+      for(;;); // Don't proceed, loop forever
+    }
+    // Clear the buffer
+    display.clearDisplay();
+    draw_info("bw: "+String(lora_bw),1,false);
+    draw_info("freq: "+String(lora_freq),2,false);
+    draw_info("txp: "+String(lora_txp),3,false);
+    draw_info("sf: "+String(lora_sf),4,false);
+    draw_info("cr: "+String(lora_cr),5,false);
+    draw_info("status: offline",6,true);
+
+  #else
+    while (!Serial);
   #endif
   // Configure input and output pins
   pinMode(pin_led_rx, OUTPUT);
@@ -93,7 +122,7 @@ bool startRadio() {
         led_indicate_error(0);
       } else {
         radio_online = true;
-
+        draw_info("freq: "+String(lora_freq),2,false);
         setTXPower();
         setBandwidth();
         setSpreadingFactor();
@@ -108,6 +137,7 @@ bool startRadio() {
         // Flash an info pattern to indicate
         // that the radio is now on
         led_indicate_info(3);
+        draw_info("status: online",6,true);
       }
 
     } else {
@@ -115,6 +145,7 @@ bool startRadio() {
       // that the radio was locked, and thus
       // not started
       led_indicate_warning(3);
+      draw_info("status: offline",6,true);
     }
   } else {
     // If radio is already on, we silently
@@ -125,6 +156,7 @@ bool startRadio() {
 void stopRadio() {
   LoRa.end();
   radio_online = false;
+  draw_info("status: offline",6,true);
 }
 
 void update_radio_lock() {
@@ -145,21 +177,20 @@ void receiveCallback(int packet_size) {
     uint8_t header   = LoRa.read(); packet_size--;
     uint8_t sequence = packetSequence(header);
     bool    ready    = false;
-
     if (isSplitPacket(header) && seq == SEQ_UNSET) {
       // This is the first part of a split
       // packet, so we set the seq variable
       // and add the data to the buffer
       read_len = 0;
       seq = sequence;
-      last_rssi = LoRa.packetRssi();
+      //last_rssi = LoRa.packetRssi();
       last_snr_raw = LoRa.packetSnrRaw();
       getPacketData(packet_size);
     } else if (isSplitPacket(header) && seq == sequence) {
       // This is the second part of a split
       // packet, so we add it to the buffer
       // and set the ready flag.
-      last_rssi = (last_rssi+LoRa.packetRssi())/2;
+      //last_rssi = (last_rssi+LoRa.packetRssi())/2;
       last_snr_raw = (last_snr_raw+LoRa.packetSnrRaw())/2;
       getPacketData(packet_size);
       seq = SEQ_UNSET;
@@ -171,7 +202,7 @@ void receiveCallback(int packet_size) {
       // a new split packet.
       read_len = 0;
       seq = sequence;
-      last_rssi = LoRa.packetRssi();
+      //last_rssi = LoRa.packetRssi();
       last_snr_raw = LoRa.packetSnrRaw();
       getPacketData(packet_size);
     } else if (!isSplitPacket(header)) {
@@ -186,7 +217,7 @@ void receiveCallback(int packet_size) {
         seq = SEQ_UNSET;
       }
 
-      last_rssi = LoRa.packetRssi();
+      //last_rssi = LoRa.packetRssi();
       last_snr_raw = LoRa.packetSnrRaw();
       getPacketData(packet_size);
       ready = true;
@@ -214,7 +245,7 @@ void receiveCallback(int packet_size) {
     // In promiscuous mode, raw packets are
     // output directly over to the host
     read_len = 0;
-    last_rssi = LoRa.packetRssi();
+    //last_rssi = LoRa.packetRssi();
     last_snr_raw = LoRa.packetSnrRaw();
     getPacketData(packet_size);
 
@@ -627,7 +658,9 @@ void loop() {
       stopRadio();
     }
   }
-
+  #ifdef ESP32
+  buffer_serial(); // todo find issue with timerinterupt routine
+  #endif
   if (!fifo_isempty_locked(&serialFIFO)) serial_poll();
 }
 
@@ -645,7 +678,8 @@ void serial_poll() {
 
 #define MAX_CYCLES 20
 #ifdef ESP32
-void IRAM_ATTR buffer_serial() {
+//void IRAM_ATTR buffer_serial() {
+void buffer_serial() {
   portENTER_CRITICAL_ISR(&timerMux);
 #else
 void buffer_serial() {
