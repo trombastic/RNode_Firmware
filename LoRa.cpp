@@ -218,13 +218,24 @@ uint8_t LoRaClass::packetRssiRaw() {
 }
 
 int LoRaClass::packetRssi() {
+  int8_t snr=0;
   int pkt_rssi = (int)readRegister(REG_PKT_RSSI_VALUE) - RSSI_OFFSET;
-  int pkt_snr = packetSnr();
-
+  int16_t pkt_snr = packetSnrRaw();
+  if( pkt_snr & 0x80 ) // The SNR sign bit is 1
+    {
+      // Invert and divide by 4
+      snr = ( ( ~pkt_snr + 1 ) & 0xFF ) >> 2;
+      snr = -snr;
+    }
+    else
+    {
+      // Divide by 4
+      snr = ( pkt_snr & 0xFF ) >> 2;
+    }
   if (_frequency < 820E6) pkt_rssi -= 7;
 
   if (pkt_snr < 0) {
-    pkt_rssi += pkt_snr;
+    pkt_rssi += snr;
   } else {
     // Slope correction is (16/15)*pkt_rssi,
     // this estimation looses one floating point
