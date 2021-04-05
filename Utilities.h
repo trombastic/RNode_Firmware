@@ -284,12 +284,16 @@ void getPacketData(int len) {
 
 void setSpreadingFactor() {
 	if (radio_online) LoRa.setSpreadingFactor(lora_sf);
+  #ifdef ESP32
   draw_info("sf: "+String(lora_sf),4,true);
+  #endif
 }
 
 void setCodingRate() {
 	if (radio_online) LoRa.setCodingRate4(lora_cr);
+  #ifdef ESP32
   draw_info("cr: "+String(lora_cr),5,true);
+  #endif
 }
 
 void set_implicit_length(uint8_t len) {
@@ -306,7 +310,9 @@ void setTXPower() {
 		if (model == MODEL_A4) LoRa.setTxPower(lora_txp, PA_OUTPUT_RFO_PIN);
 		if (model == MODEL_A9) LoRa.setTxPower(lora_txp, PA_OUTPUT_PA_BOOST_PIN);
    	if (model == MODEL_B1) LoRa.setTxPower(lora_txp, PA_OUTPUT_RFO_PIN);
+    #ifdef ESP32
     draw_info("txp: "+String(lora_txp),3,true);
+    #endif
 	}
 }
 
@@ -321,7 +327,9 @@ void setBandwidth() {
 	if (radio_online) {
 		LoRa.setSignalBandwidth(lora_bw);
 		getBandwidth();
+   #ifdef ESP32
     draw_info("bw: "+String(lora_bw),1,true);
+    #endif
 	}
 }
 
@@ -335,7 +343,9 @@ void setFrequency() {
 	if (radio_online) {
 		LoRa.setFrequency(lora_freq);
 		getFrequency();
+   #ifdef ESP32
     draw_info("freq: "+String(lora_freq),2,true);
+    #endif
 	}
 }
 

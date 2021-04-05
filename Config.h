@@ -8,7 +8,7 @@
 
 	#define MCU_328P  0x90
 	#define MCU_1284P 0x91
-  	#define MCU_ESP32 0x92
+  #define MCU_ESP32 0x92
 
 	#define MODE_HOST 0x11
 	#define MODE_TNC  0x12

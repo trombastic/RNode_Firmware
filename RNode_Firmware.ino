@@ -51,7 +51,7 @@ void setup() {
 
   Serial.begin(serial_baudrate);
   
-  #if defined(ESP32)
+  #ifdef ESP32
     preferences.begin("RNode", false);
     pinMode(Vext,OUTPUT);
     digitalWrite(Vext, LOW);
@@ -63,11 +63,12 @@ void setup() {
     }
     // Clear the buffer
     display.clearDisplay();
+    draw_info("rssi: ",0,false);
     draw_info("bw: "+String(lora_bw),1,false);
     draw_info("freq: "+String(lora_freq),2,false);
     draw_info("txp: "+String(lora_txp),3,false);
     draw_info("sf: "+String(lora_sf),4,false);
-    draw_info("cr: "+String(lora_cr),5,false);
+    draw_info("cr: "+String(lora_cr),5,true);
     draw_info("status: offline",6,true);
 
   #else
@@ -122,7 +123,9 @@ bool startRadio() {
         led_indicate_error(0);
       } else {
         radio_online = true;
+        #ifdef ESP32
         draw_info("freq: "+String(lora_freq),2,false);
+        #endif
         setTXPower();
         setBandwidth();
         setSpreadingFactor();
@@ -137,7 +140,9 @@ bool startRadio() {
         // Flash an info pattern to indicate
         // that the radio is now on
         led_indicate_info(3);
+        #ifdef ESP32
         draw_info("status: online",6,true);
+        #endif
       }
 
     } else {
@@ -145,7 +150,9 @@ bool startRadio() {
       // that the radio was locked, and thus
       // not started
       led_indicate_warning(3);
+      #ifdef ESP32
       draw_info("status: offline",6,true);
+      #endif
     }
   } else {
     // If radio is already on, we silently
@@ -156,7 +163,9 @@ bool startRadio() {
 void stopRadio() {
   LoRa.end();
   radio_online = false;
+  #ifdef ESP32
   draw_info("status: offline",6,true);
+  #endif
 }
 
 void update_radio_lock() {
@@ -177,20 +186,22 @@ void receiveCallback(int packet_size) {
     uint8_t header   = LoRa.read(); packet_size--;
     uint8_t sequence = packetSequence(header);
     bool    ready    = false;
+    
+    
     if (isSplitPacket(header) && seq == SEQ_UNSET) {
       // This is the first part of a split
       // packet, so we set the seq variable
       // and add the data to the buffer
       read_len = 0;
       seq = sequence;
-      //last_rssi = LoRa.packetRssi();
+      last_rssi = LoRa.packetRssi();
       last_snr_raw = LoRa.packetSnrRaw();
       getPacketData(packet_size);
     } else if (isSplitPacket(header) && seq == sequence) {
       // This is the second part of a split
       // packet, so we add it to the buffer
       // and set the ready flag.
-      //last_rssi = (last_rssi+LoRa.packetRssi())/2;
+      last_rssi = (last_rssi+LoRa.packetRssi())/2;
       last_snr_raw = (last_snr_raw+LoRa.packetSnrRaw())/2;
       getPacketData(packet_size);
       seq = SEQ_UNSET;
@@ -202,7 +213,7 @@ void receiveCallback(int packet_size) {
       // a new split packet.
       read_len = 0;
       seq = sequence;
-      //last_rssi = LoRa.packetRssi();
+      last_rssi = LoRa.packetRssi();
       last_snr_raw = LoRa.packetSnrRaw();
       getPacketData(packet_size);
     } else if (!isSplitPacket(header)) {
@@ -217,7 +228,7 @@ void receiveCallback(int packet_size) {
         seq = SEQ_UNSET;
       }
 
-      //last_rssi = LoRa.packetRssi();
+      last_rssi = LoRa.packetRssi();
       last_snr_raw = LoRa.packetSnrRaw();
       getPacketData(packet_size);
       ready = true;
@@ -245,7 +256,7 @@ void receiveCallback(int packet_size) {
     // In promiscuous mode, raw packets are
     // output directly over to the host
     read_len = 0;
-    //last_rssi = LoRa.packetRssi();
+    last_rssi = LoRa.packetRssi();
     last_snr_raw = LoRa.packetSnrRaw();
     getPacketData(packet_size);
 
@@ -264,7 +275,10 @@ void receiveCallback(int packet_size) {
       Serial.write(byte);
     }
     Serial.write(FEND);
-    read_len = 0;    
+    read_len = 0;
+    #ifdef ESP32
+    draw_info("status: Packet ",6,true);
+    #endif    
   }
 }
 

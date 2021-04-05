@@ -5,7 +5,6 @@
 // Obviously still under the MIT license.
 
 #include "LoRa.h"
-
 // Registers
 #define REG_FIFO                 0x00
 #define REG_OP_MODE              0x01
@@ -266,8 +265,11 @@ long LoRaClass::packetFrequencyError()
   if (readRegister(REG_FREQ_ERROR_MSB) & B1000) { // Sign bit is on
      freqError -= 524288; // B1000'0000'0000'0000'0000
   }
-
+  #ifdef ESP32
+  const float fXtal = 40E6; // FXOSC: crystal oscillator (XTAL) frequency (2.5. Chip Specification, p. 14)
+  #else
   const float fXtal = 32E6; // FXOSC: crystal oscillator (XTAL) frequency (2.5. Chip Specification, p. 14)
+  #endif
   const float fError = ((static_cast<float>(freqError) * (1L << 24)) / fXtal) * (getSignalBandwidth() / 500000.0f); // p. 37
 
   return static_cast<long>(fError);
