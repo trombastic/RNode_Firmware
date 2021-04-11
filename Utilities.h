@@ -667,9 +667,9 @@ inline void fifo_flush(FIFOBuffer *f) {
 static inline bool fifo_isempty_locked(const FIFOBuffer *f) {
   bool result;
   #ifdef ESP32
-    timerStop(timer);
+    portENTER_CRITICAL_ISR(&timerMux);
     result = fifo_isempty(f);
-    timerRestart(timer);
+    portEXIT_CRITICAL_ISR(&timerMux);
   #else
   ATOMIC_BLOCK(ATOMIC_RESTORESTATE) {
     result = fifo_isempty(f);
@@ -681,9 +681,9 @@ static inline bool fifo_isempty_locked(const FIFOBuffer *f) {
 static inline bool fifo_isfull_locked(const FIFOBuffer *f) {
   bool result;
   #ifdef ESP32
-  timerStop(timer);
+  portENTER_CRITICAL_ISR(&timerMux);
   result = fifo_isfull(f);
-  timerRestart(timer);
+  portEXIT_CRITICAL_ISR(&timerMux);
   #else
   ATOMIC_BLOCK(ATOMIC_RESTORESTATE) {
     result = fifo_isfull(f);
@@ -694,9 +694,9 @@ static inline bool fifo_isfull_locked(const FIFOBuffer *f) {
 
 static inline void fifo_push_locked(FIFOBuffer *f, unsigned char c) {
   #ifdef ESP32
-  timerStop(timer);
+  portENTER_CRITICAL_ISR(&timerMux);
     fifo_push(f, c);
-  timerRestart(timer);
+  portEXIT_CRITICAL_ISR(&timerMux);
   #else
   ATOMIC_BLOCK(ATOMIC_RESTORESTATE) {
     fifo_push(f, c);
@@ -707,9 +707,9 @@ static inline void fifo_push_locked(FIFOBuffer *f, unsigned char c) {
 static inline unsigned char fifo_pop_locked(FIFOBuffer *f) {
   unsigned char c;
   #ifdef ESP32
-    timerStop(timer);
+    portENTER_CRITICAL_ISR(&timerMux);
     c = fifo_pop(f);
-    timerRestart(timer);
+    portEXIT_CRITICAL_ISR(&timerMux);
   #else
     ATOMIC_BLOCK(ATOMIC_RESTORESTATE) {
       c = fifo_pop(f);
@@ -769,9 +769,9 @@ inline void fifo16_flush(FIFOBuffer16 *f) {
 static inline bool fifo16_isempty_locked(const FIFOBuffer16 *f) {
   bool result;
   #ifdef ESP32
-    timerStop(timer);
+    portENTER_CRITICAL_ISR(&timerMux);
     result = fifo16_isempty(f);
-    timerRestart(timer);
+    portEXIT_CRITICAL_ISR(&timerMux);
   #else
   ATOMIC_BLOCK(ATOMIC_RESTORESTATE) {
     result = fifo16_isempty(f);
@@ -783,9 +783,9 @@ static inline bool fifo16_isempty_locked(const FIFOBuffer16 *f) {
 static inline bool fifo16_isfull_locked(const FIFOBuffer16 *f) {
   bool result;
   #ifdef ESP32
-    timerStop(timer);
+    portENTER_CRITICAL_ISR(&timerMux);
     result = fifo16_isfull(f);
-    timerRestart(timer);
+    portEXIT_CRITICAL_ISR(&timerMux);
   #else
   ATOMIC_BLOCK(ATOMIC_RESTORESTATE) {
     result = fifo16_isfull(f);
@@ -796,9 +796,9 @@ static inline bool fifo16_isfull_locked(const FIFOBuffer16 *f) {
 
 static inline void fifo16_push_locked(FIFOBuffer16 *f, size_t c) {
   #ifdef ESP32
-    timerStop(timer);
+    portENTER_CRITICAL_ISR(&timerMux);
     fifo16_push(f, c);
-    timerRestart(timer);
+    portEXIT_CRITICAL_ISR(&timerMux);
   #else
   ATOMIC_BLOCK(ATOMIC_RESTORESTATE) {
     fifo16_push(f, c);
@@ -809,9 +809,9 @@ static inline void fifo16_push_locked(FIFOBuffer16 *f, size_t c) {
 static inline size_t fifo16_pop_locked(FIFOBuffer16 *f) {
   size_t c;
   #ifdef ESP32
-    timerStop(timer);
+    portENTER_CRITICAL_ISR(&timerMux);
     c = fifo16_pop(f);
-    timerRestart(timer);
+    portEXIT_CRITICAL_ISR(&timerMux);
   #else
   ATOMIC_BLOCK(ATOMIC_RESTORESTATE) {
     c = fifo16_pop(f);

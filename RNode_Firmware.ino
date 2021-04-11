@@ -50,7 +50,7 @@ void setup() {
   fifo_init(&serialFIFO, serialBuffer, CONFIG_UART_BUFFER_SIZE);
 
   Serial.begin(serial_baudrate);
-  
+  while (!Serial);
   #ifdef ESP32
     preferences.begin("RNode", false);
     pinMode(Vext,OUTPUT);
@@ -673,7 +673,7 @@ void loop() {
     }
   }
   #ifdef ESP32
-  buffer_serial(); // todo find issue with timerinterupt routine
+  //buffer_serial(); // todo find issue with timerinterupt routine
   #endif
   if (!fifo_isempty_locked(&serialFIFO)) serial_poll();
 }
@@ -690,12 +690,13 @@ void serial_poll() {
   serial_polling = false;
 }
 
-#define MAX_CYCLES 20
+
 #ifdef ESP32
-//void IRAM_ATTR buffer_serial() {
-void buffer_serial() {
+#define MAX_CYCLES 200
+void IRAM_ATTR buffer_serial() {
   portENTER_CRITICAL_ISR(&timerMux);
 #else
+#define MAX_CYCLES 20
 void buffer_serial() {
 #endif
   if (!serial_buffering) {
@@ -719,7 +720,7 @@ void buffer_serial() {
 
 #ifdef ESP32
 void serial_interrupt_init() {
-    timer = timerBegin(0, 80, true);
+    timer = timerBegin(0, 80, true); // CLK is 250 MHz
     timerAttachInterrupt(timer, &buffer_serial, true);
     timerAlarmWrite(timer, 1000, true);
     timerAlarmEnable(timer);
