@@ -21,6 +21,23 @@
       #define LORA_DEFAULT_DIO0_PIN  26
       #define PA_OUTPUT_RFO_PIN      0
       #define PA_OUTPUT_PA_BOOST_PIN 1
+      /*!
+       * RegPaDac
+       */
+      #define RF_PADAC_20DBM_MASK                         0xF8
+      #define RF_PADAC_20DBM_ON                           0x07
+      #define RF_PADAC_20DBM_OFF                          0x04  // Default
+      /*!
+       * RegPaConfig
+       */
+      #define RF_PACONFIG_PASELECT_MASK                   0x7F
+      #define RF_PACONFIG_PASELECT_PABOOST                0x80
+      #define RF_PACONFIG_PASELECT_RFO                    0x00 // Default
+      
+      #define RF_PACONFIG_MAX_POWER_MASK                  0x8F
+      
+      #define RF_PACONFIG_OUTPUTPOWER_MASK                0xF0
+
   #endif
 
 #define RSSI_OFFSET 157
@@ -57,8 +74,11 @@ public:
   void receive(int16_t size = 0);
   void idle();
   void sleep();
-
+  #ifdef ESP32
+  void setTxPower(int8_t power, int8_t outputPin = PA_OUTPUT_PA_BOOST_PIN);
+  #else
   void setTxPower(int16_t level, int16_t outputPin = PA_OUTPUT_PA_BOOST_PIN);
+  #endif
   uint32_t getFrequency();
   void setFrequency(int32_t frequency);
   void setSpreadingFactor(int16_t sf);

@@ -39,7 +39,8 @@ volatile size_t queue_cursor = 0;
 volatile size_t current_packet_start = 0;
 volatile bool serial_buffering = false;
 #ifdef ESP32
-volatile int16_t bytes_recived = 0;
+volatile int16_t bytes_received = 0;
+volatile int16_t packets_received = 0;
 #endif
 char sbuf[128];
 
@@ -182,7 +183,7 @@ void update_radio_lock() {
 }
 
 void receiveCallback(int16_t packet_size) {
-  bytes_recived = packet_size;
+  bytes_received = packet_size;
   if (!promisc) {
     // The standard operating mode allows large
     // packets with a payload up to 500 bytes,
@@ -686,11 +687,12 @@ void loop() {
   }
   if (!fifo_isempty_locked(&serialFIFO)) serial_poll();
   #ifdef ESP32
-  if (bytes_recived != 0){
+  if (bytes_received != 0){
+    packets_received++;
     draw_info("rssi: "+String(last_rssi),0,false);
-    draw_info("recived: "+String(bytes_recived),6,true);
-    bytes_recived = 0;
-    preferences.putChar("test",123);
+    draw_info("received: "+String(bytes_received) + "(" + String(packets_received) + ")",6,true);
+    
+    bytes_received = 0;
   }
   
   uint8_t  c = 0;

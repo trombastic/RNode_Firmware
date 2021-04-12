@@ -37,7 +37,7 @@
 #define REG_SYNC_WORD            0x39
 #define REG_DIO_MAPPING_1        0x40
 #define REG_VERSION              0x42
-
+#define REG_PaDac                0x4d//add REG_PaDac
 // Modes
 #define MODE_LONG_RANGE_MODE     0x80
 #define MODE_SLEEP               0x00
@@ -112,7 +112,8 @@ int16_t LoRaClass::begin(int32_t frequency)
 
   // set output power to 2 dBm
   setTxPower(2);
-
+  // explicit set SyncWord to 0x12 (the default value)
+  setSyncWord(0x12);
   // put in standby mode
   idle();
 
@@ -381,6 +382,70 @@ void LoRaClass::sleep()
   writeRegister(REG_OP_MODE, MODE_LONG_RANGE_MODE | MODE_SLEEP);
 }
 
+#ifdef ESP32
+void LoRaClass::setTxPower(int8_t power, int8_t outputPin)
+{
+    uint8_t paConfig = 0;
+    uint8_t paDac = 0;
+
+    paConfig = readRegister( REG_PA_CONFIG );
+    paDac = readRegister( REG_PaDac );
+
+    paConfig = ( paConfig & RF_PACONFIG_PASELECT_MASK ) | outputPin;
+    paConfig = ( paConfig & RF_PACONFIG_MAX_POWER_MASK ) | 0x70;
+
+    if( ( paConfig & RF_PACONFIG_PASELECT_PABOOST ) == RF_PACONFIG_PASELECT_PABOOST )
+    {
+      if( power > 17 )
+      {
+        paDac = ( paDac & RF_PADAC_20DBM_MASK ) | RF_PADAC_20DBM_ON;
+      }
+      else
+      {
+        paDac = ( paDac & RF_PADAC_20DBM_MASK ) | RF_PADAC_20DBM_OFF;
+      }
+      if( ( paDac & RF_PADAC_20DBM_ON ) == RF_PADAC_20DBM_ON )
+      {
+        if( power < 5 )
+        {
+          power = 5;
+        }
+        if( power > 20 )
+        {
+          power = 20;
+        }
+        paConfig = ( paConfig & RF_PACONFIG_OUTPUTPOWER_MASK ) | ( uint8_t )( ( uint16_t )( power - 5 ) & 0x0F );
+      }
+      else
+      {
+        if( power < 2 )
+        {
+          power = 2;
+        }
+        if( power > 17 )
+        {
+          power = 17;
+        }
+        paConfig = ( paConfig & RF_PACONFIG_OUTPUTPOWER_MASK ) | ( uint8_t )( ( uint16_t )( power - 2 ) & 0x0F );
+      }
+    }
+    else
+    {
+      if( power < -1 )
+      {
+        power = -1;
+      }
+      if( power > 14 )
+      {
+        power = 14;
+      }
+      paConfig = ( paConfig & RF_PACONFIG_OUTPUTPOWER_MASK ) | ( uint8_t )( ( uint16_t )( power + 1 ) & 0x0F );
+    }
+    writeRegister( REG_PA_CONFIG, paConfig );
+    writeRegister( REG_PaDac, paDac );
+}
+
+#else
 void LoRaClass::setTxPower(int16_t level, int16_t outputPin) {
   if (PA_OUTPUT_RFO_PIN == outputPin) {
     // RFO
@@ -403,6 +468,8 @@ void LoRaClass::setTxPower(int16_t level, int16_t outputPin) {
     writeRegister(REG_PA_CONFIG, PA_BOOST | (level - 2));
   }
 }
+#endif
+
 
 void LoRaClass::setFrequency(int32_t frequency) {
   _frequency = frequency;
