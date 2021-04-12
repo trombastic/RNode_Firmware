@@ -28,21 +28,21 @@ void draw_info(String text, uint8_t line, bool draw_now){
 }
 
 uint8_t getPrefByte(int16_t addr, uint8_t default_val) {
-  return prefbuf[addr];
-  //char cstr[16];
-  //sprintf(cstr, "%05d", adr);
-  //uint8_t data = preferences.getUChar(cstr, default_val);
-  //return data;
+  //return prefbuf[addr];
+  char cstr[16];
+  sprintf(cstr, "%05d", addr);
+  uint8_t data = preferences.getUChar(cstr, default_val);
+  return data;
 }
 
 void putPrefByte(int16_t adr, uint8_t val) {
-  //char cstr[16];
-  //sprintf(cstr, "%05d", adr);
+  char cstr[16];
+  sprintf(cstr, "%05d", adr);
   //draw_info(cstr,1,false);
   //draw_info(String(val),0,true);
-  prefbuf[adr] = val;
+  //prefbuf[adr] = val;
   //prefbuf_update = true;
-  //size_t ok = preferences.putUChar(cstr, val);
+  size_t ok = preferences.putUChar(cstr, val);
 }
 
 boolean checkPref(int16_t adr, uint8_t val) {
@@ -860,7 +860,7 @@ inline size_t fifo16_len(FIFOBuffer16 *f) {
 
 #ifdef ESP32
 void load_defaults() {
-  //if (!checkPref(ADDR_INFO_LOCK,INFO_LOCK_BYTE)){
+  if (!checkPref(ADDR_INFO_LOCK,INFO_LOCK_BYTE)){
   //preferences.clear();
   putPrefByte(ADDR_PRODUCT, PRODUCT_RNODE);
   putPrefByte(ADDR_MODEL, MODEL_B1);
@@ -870,28 +870,28 @@ void load_defaults() {
   putPrefByte(ADDR_SERIAL + 0x02, 123);
   putPrefByte(ADDR_SERIAL + 0x03, 123);
   putPrefByte(ADDR_INFO_LOCK, INFO_LOCK_BYTE);
-//  putPrefByte(ADDR_CONF_SF, 0);
-//  putPrefByte(ADDR_CONF_CR, 0);
-//  putPrefByte(ADDR_CONF_TXP, 0);
-//
-//  putPrefByte(ADDR_CONF_SF, lora_sf);
-//  putPrefByte(ADDR_CONF_CR, lora_cr);
-//  putPrefByte(ADDR_CONF_TXP, lora_txp);
-//
-//  putPrefByte(ADDR_CONF_BW, lora_bw >> 24);
-//  putPrefByte(ADDR_CONF_BW + 0x01, lora_bw >> 16);
-//  putPrefByte(ADDR_CONF_BW + 0x02, lora_bw >> 8);
-//  putPrefByte(ADDR_CONF_BW + 0x03, lora_bw);
-//
-//  putPrefByte(ADDR_CONF_FREQ + 0x00, lora_freq >> 24);
-//  putPrefByte(ADDR_CONF_FREQ + 0x01, lora_freq >> 16);
-//  putPrefByte(ADDR_CONF_FREQ + 0x02, lora_freq >> 8);
-//  putPrefByte(ADDR_CONF_FREQ + 0x03, lora_freq);
+  putPrefByte(ADDR_CONF_SF, 0);
+  putPrefByte(ADDR_CONF_CR, 0);
+  putPrefByte(ADDR_CONF_TXP, 0);
+
+  putPrefByte(ADDR_CONF_SF, lora_sf);
+  putPrefByte(ADDR_CONF_CR, lora_cr);
+  putPrefByte(ADDR_CONF_TXP, lora_txp);
+
+  putPrefByte(ADDR_CONF_BW, lora_bw >> 24);
+  putPrefByte(ADDR_CONF_BW + 0x01, lora_bw >> 16);
+  putPrefByte(ADDR_CONF_BW + 0x02, lora_bw >> 8);
+  putPrefByte(ADDR_CONF_BW + 0x03, lora_bw);
+
+  putPrefByte(ADDR_CONF_FREQ + 0x00, lora_freq >> 24);
+  putPrefByte(ADDR_CONF_FREQ + 0x01, lora_freq >> 16);
+  putPrefByte(ADDR_CONF_FREQ + 0x02, lora_freq >> 8);
+  putPrefByte(ADDR_CONF_FREQ + 0x03, lora_freq);
   unsigned char *hash = eeprom_checksum_calc();
   for (uint8_t i = 0; i < CHECKSUMMED_SIZE; i++) {
     putPrefByte(ADDR_CHKSUM + i, (uint8_t)hash[i]);
   }
-  //putPrefByte(ADDR_CONF_OK, CONF_OK_BYTE);
-  //}
+  putPrefByte(ADDR_CONF_OK, CONF_OK_BYTE);
+  }
 }
 #endif

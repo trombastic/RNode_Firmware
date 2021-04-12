@@ -74,7 +74,7 @@ void setup() {
     draw_info("sf: "+String(lora_sf),4,false);
     draw_info("cr: "+String(lora_cr),5,true);
     draw_info("status: offline",6,true);
-    load_defaults();
+    //load_defaults();
   #else
     while (!Serial);
   #endif
@@ -690,6 +690,15 @@ void loop() {
     draw_info("rssi: "+String(last_rssi),0,false);
     draw_info("recived: "+String(bytes_recived),6,true);
     bytes_recived = 0;
+    preferences.putChar("test",123);
+  }
+  
+  uint8_t  c = 0;
+  while (c < 20 && Serial.available()) {
+    c++;
+    if (!fifo_isfull_locked(&serialFIFO)) {
+      fifo_push_locked(&serialFIFO, Serial.read());
+    }
   }
   #endif
 }
@@ -708,7 +717,7 @@ void serial_poll() {
 
 
 #ifdef ESP32
-#define MAX_CYCLES 200
+#define MAX_CYCLES 20
 void IRAM_ATTR buffer_serial() {
   portENTER_CRITICAL_ISR(&timerMux);
 #else
@@ -736,10 +745,10 @@ void buffer_serial() {
 
 #ifdef ESP32
 void serial_interrupt_init() {
-    timer = timerBegin(0, 80, true); // CLK is 250 MHz
-    timerAttachInterrupt(timer, &buffer_serial, true);
-    timerAlarmWrite(timer, 1000, true);
-    timerAlarmEnable(timer);
+    //timer = timerBegin(0, 80, true); // CLK is 250 MHz
+    //timerAttachInterrupt(timer, &buffer_serial, true);
+    //timerAlarmWrite(timer, 1000, true);
+    //timerAlarmEnable(timer);
 }
 #else
 void serial_interrupt_init() {
