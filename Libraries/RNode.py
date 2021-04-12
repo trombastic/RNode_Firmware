@@ -62,7 +62,7 @@ class KISS():
     RADIO_STATE_OFF = 0x00
     RADIO_STATE_ON  = 0x01
     RADIO_STATE_ASK = 0xFF
-    
+
     CMD_ERROR           = 0x90
     ERROR_INITRADIO     = 0x01
     ERROR_TXFAILED      = 0x02
@@ -73,7 +73,7 @@ class KISS():
         data = data.replace(bytes([0xdb]), bytes([0xdb, 0xdd]))
         data = data.replace(bytes([0xc0]), bytes([0xdb, 0xdc]))
         return data
-    
+
 
 class RNodeInterface():
     MTU       = 500
@@ -201,6 +201,7 @@ class RNodeInterface():
             self.log("Serial port "+self.port+" is now open")
             self.log("Configuring RNode interface...", RNodeInterface.LOG_VERBOSE)
             self.initRadio()
+            sleep(2.0)
             if (self.validateRadioState()):
                 self.interface_ready = True
                 self.log(str(self)+" is configured and powered up")
@@ -368,7 +369,7 @@ class RNodeInterface():
                 if self.serial.in_waiting:
                     byte = ord(self.serial.read(1))
                     last_read_ms = int(time.time()*1000)
-
+                    #dprint(chr(byte),end='',flush=True)
                     if (in_frame and byte == KISS.FEND and command == KISS.CMD_DATA):
                         in_frame = False
                         self.processIncoming(data_buffer)
@@ -483,7 +484,7 @@ class RNodeInterface():
                                 self.log(str(self)+" hardware error (code "+RNS.hexrep(byte)+")", RNodeInterface.LOG_ERROR)
                         elif (command == KISS.CMD_READY):
                             self.process_queue()
-                        
+
                 else:
                     time_since_last = int(time.time()*1000) - last_read_ms
                     if len(data_buffer) > 0 and time_since_last > self.timeout:

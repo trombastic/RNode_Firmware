@@ -33,11 +33,11 @@
 	// MCU dependent configuration parameters
 
 	#if MCU_VARIANT == MCU_1284P
-		const int pin_cs = 4;
-		const int pin_reset = 3;
-		const int pin_dio = 2;
-		const int pin_led_rx = 12;
-		const int pin_led_tx = 13;
+		const int16_t pin_cs = 4;
+		const int16_t pin_reset = 3;
+		const int16_t pin_dio = 2;
+		const int16_t pin_led_rx = 12;
+		const int16_t pin_led_tx = 13;
 
 		// TODO: Reset
 		#define CONFIG_UART_BUFFER_SIZE 6144
@@ -47,11 +47,11 @@
 		#define EEPROM_SIZE 4096
 		#define EEPROM_OFFSET EEPROM_SIZE-EEPROM_RESERVED
 	#elif MCU_VARIANT == MCU_ESP32
-		const int pin_cs = 18;
-		const int pin_reset = 23;
-		const int pin_dio = 26;
-		const int pin_led_rx = 25;
-		const int pin_led_tx = 25;
+		const int16_t pin_cs = 18;
+		const int16_t pin_reset = 23;
+		const int16_t pin_dio = 26;
+		const int16_t pin_led_rx = 25;
+		const int16_t pin_led_tx = 25;
 
 		// TODO: Reset
 		#define CONFIG_UART_BUFFER_SIZE 6144
@@ -59,25 +59,30 @@
 		#define CONFIG_QUEUE_MAX_LENGTH 250
 
 		#define EEPROM_SIZE 4096
-		#define EEPROM_OFFSET EEPROM_SIZE-EEPROM_RESERVED
+		#define EEPROM_OFFSET 0
+    volatile uint8_t prefbuf[EEPROM_SIZE];
+    volatile boolean prefbuf_update = false;
 	#endif
-
-	#define eeprom_addr(a) (a+EEPROM_OFFSET)
-
+  
+  #ifdef ESP32
+    #define eeprom_addr(a) (a)
+  #else
+	  #define eeprom_addr(a) (a+EEPROM_OFFSET)
+  #endif
 	// MCU independent configuration parameters
-	const long serial_baudrate  = 115200;
-	const int lora_rx_turnaround_ms = 50;
+	const int32_t serial_baudrate  = 115200;
+	const int16_t lora_rx_turnaround_ms = 50;
 
 	// SX1276 RSSI offset to get dBm value from
 	// packet RSSI register
-	const int  rssi_offset      = 157;
+	const int16_t  rssi_offset      = 157;
 
 	// Default LoRa settings
-	int  lora_sf   	   = 0;
-	int  lora_cr       = 5;
-	int  lora_txp      = 0xFF;
-	uint32_t lora_bw   = 0;
-	uint32_t lora_freq = 0;
+	int16_t  lora_sf   	   = 7;
+	int16_t  lora_cr       = 5;
+	int16_t  lora_txp      = 0x00;
+	uint32_t lora_bw   = 125000;
+	uint32_t lora_freq = 868000000;
 
 	// Operational variables
 	bool radio_locked  = true;
@@ -91,7 +96,7 @@
 	uint8_t model     = 0x00;
 	uint8_t hwrev     = 0x00;
 	
-	int		last_rssi		= -292;
+	int16_t		last_rssi		= -292;
 	uint8_t last_rssi_raw   = 0x00;
 	uint8_t last_snr_raw	= 0x00;
 	size_t	read_len		= 0;

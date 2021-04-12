@@ -38,8 +38,11 @@ volatile size_t queued_bytes = 0;
 volatile size_t queue_cursor = 0;
 volatile size_t current_packet_start = 0;
 volatile bool serial_buffering = false;
-
+#ifdef ESP32
+volatile int16_t bytes_recived = 0;
+#endif
 char sbuf[128];
+
 
 void setup() {
   // Seed the PRNG
@@ -53,6 +56,7 @@ void setup() {
   while (!Serial);
   #ifdef ESP32
     preferences.begin("RNode", false);
+    //preferences.clear();
     pinMode(Vext,OUTPUT);
     digitalWrite(Vext, LOW);
     twi.begin(OLED_SDA,OLED_SCL);
@@ -63,14 +67,14 @@ void setup() {
     }
     // Clear the buffer
     display.clearDisplay();
-    draw_info("rssi: ",0,false);
+    draw_info("promisc: "+String(promisc),0,false);
     draw_info("bw: "+String(lora_bw),1,false);
     draw_info("freq: "+String(lora_freq),2,false);
     draw_info("txp: "+String(lora_txp),3,false);
     draw_info("sf: "+String(lora_sf),4,false);
     draw_info("cr: "+String(lora_cr),5,true);
     draw_info("status: offline",6,true);
-
+    load_defaults();
   #else
     while (!Serial);
   #endif
@@ -141,6 +145,7 @@ bool startRadio() {
         // that the radio is now on
         led_indicate_info(3);
         #ifdef ESP32
+        draw_info("promisc: "+String(promisc),0,false);
         draw_info("status: online",6,true);
         #endif
       }
@@ -176,7 +181,8 @@ void update_radio_lock() {
   }
 }
 
-void receiveCallback(int packet_size) {
+void receiveCallback(int16_t packet_size) {
+  bytes_recived = packet_size;
   if (!promisc) {
     // The standard operating mode allows large
     // packets with a payload up to 500 bytes,
@@ -196,14 +202,14 @@ void receiveCallback(int packet_size) {
       seq = sequence;
       last_rssi = LoRa.packetRssi();
       last_snr_raw = LoRa.packetSnrRaw();
-      getPacketData(packet_size);
+      getPacketData(packet_size); // updates read_len
     } else if (isSplitPacket(header) && seq == sequence) {
       // This is the second part of a split
       // packet, so we add it to the buffer
       // and set the ready flag.
       last_rssi = (last_rssi+LoRa.packetRssi())/2;
       last_snr_raw = (last_snr_raw+LoRa.packetSnrRaw())/2;
-      getPacketData(packet_size);
+      getPacketData(packet_size); // updates read_len
       seq = SEQ_UNSET;
       ready = true;
     } else if (isSplitPacket(header) && seq != sequence) {
@@ -215,7 +221,7 @@ void receiveCallback(int packet_size) {
       seq = sequence;
       last_rssi = LoRa.packetRssi();
       last_snr_raw = LoRa.packetSnrRaw();
-      getPacketData(packet_size);
+      getPacketData(packet_size); // updates read_len
     } else if (!isSplitPacket(header)) {
       // This is not a split packet, so we
       // just read it and set the ready
@@ -230,7 +236,7 @@ void receiveCallback(int packet_size) {
 
       last_rssi = LoRa.packetRssi();
       last_snr_raw = LoRa.packetSnrRaw();
-      getPacketData(packet_size);
+      getPacketData(packet_size); // updates read_len
       ready = true;
     }
 
@@ -243,7 +249,7 @@ void receiveCallback(int packet_size) {
       // And then write the entire packet
       Serial.write(FEND);
       Serial.write(CMD_DATA);
-      for (int i = 0; i < read_len; i++) {
+      for (int16_t i = 0; i < read_len; i++) {
         uint8_t byte = pbuf[i];
         if (byte == FEND) { Serial.write(FESC); byte = TFEND; }
         if (byte == FESC) { Serial.write(FESC); byte = TFESC; }
@@ -258,7 +264,7 @@ void receiveCallback(int packet_size) {
     read_len = 0;
     last_rssi = LoRa.packetRssi();
     last_snr_raw = LoRa.packetSnrRaw();
-    getPacketData(packet_size);
+    getPacketData(packet_size); // updates read_len
 
     // We first signal the RSSI of the
     // recieved packet to the host.
@@ -268,7 +274,7 @@ void receiveCallback(int packet_size) {
     // And then write the entire packet
     Serial.write(FEND);
     Serial.write(CMD_DATA);
-    for (int i = 0; i < read_len; i++) {
+    for (int16_t i = 0; i < read_len; i++) {
       uint8_t byte = pbuf[i];
       if (byte == FEND) { Serial.write(FESC); byte = TFEND; }
       if (byte == FESC) { Serial.write(FESC); byte = TFESC; }
@@ -276,9 +282,6 @@ void receiveCallback(int packet_size) {
     }
     Serial.write(FEND);
     read_len = 0;
-    #ifdef ESP32
-    draw_info("status: Packet ",6,true);
-    #endif    
   }
 }
 
@@ -318,6 +321,7 @@ void transmit(size_t size) {
     if (!promisc) {
       led_tx_on();
       size_t  written = 0;
+      size_t  written_wrap = 1;
       uint8_t header  = random(256) & 0xF0;
 
       if (size > SINGLE_MTU - HEADER_L) {
@@ -326,7 +330,7 @@ void transmit(size_t size) {
 
       LoRa.beginPacket();
       LoRa.write(header); written++;
-
+      
       for (size_t i; i < size; i++) {
         LoRa.write(tbuf[i]);  
 
@@ -337,12 +341,15 @@ void transmit(size_t size) {
           LoRa.beginPacket();
           LoRa.write(header);
           written = 1;
+          written_wrap++;
         }
       }
 
       LoRa.endPacket();
       led_tx_off();
-
+      #ifdef ESP32
+      draw_info("transmit: "+String(written*written_wrap),6,true);
+      #endif
       lora_receive();
     } else {
       // In promiscuous mode, we only send out
@@ -350,7 +357,6 @@ void transmit(size_t size) {
       // payload of 255 bytes
       led_tx_on();
       size_t  written = 0;
-      
       // Cap packets at 255 bytes
       if (size > SINGLE_MTU) {
         size = SINGLE_MTU;
@@ -371,7 +377,9 @@ void transmit(size_t size) {
       }
       LoRa.endPacket();
       led_tx_off();
-
+      #ifdef ESP32
+      draw_info("transmit: "+String(written),6,true);
+      #endif
       lora_receive();
     }
   } else {
@@ -479,7 +487,7 @@ void serialCallback(uint8_t sbyte) {
       if (sbyte == 0xFF) {
         kiss_indicate_txpower();
       } else {
-        int txp = sbyte;
+        int16_t txp = sbyte;
         if (txp > 17) txp = 17;
 
         lora_txp = txp;
@@ -490,7 +498,7 @@ void serialCallback(uint8_t sbyte) {
       if (sbyte == 0xFF) {
         kiss_indicate_spreadingfactor();
       } else {
-        int sf = sbyte;
+        int16_t sf = sbyte;
         if (sf < 6) sf = 6;
         if (sf > 12) sf = 12;
 
@@ -502,7 +510,7 @@ void serialCallback(uint8_t sbyte) {
       if (sbyte == 0xFF) {
         kiss_indicate_codingrate();
       } else {
-        int cr = sbyte;
+        int16_t cr = sbyte;
         if (cr < 5) cr = 5;
         if (cr > 8) cr = 8;
 
@@ -547,6 +555,9 @@ void serialCallback(uint8_t sbyte) {
         promisc_disable();
       }
       kiss_indicate_promisc();
+      #ifdef ESP32
+      draw_info("promisc: "+String(promisc),0,true);
+      #endif
     } else if (command == CMD_READY) {
       if (!queueFull()) {
         kiss_indicate_ready();
@@ -670,12 +681,17 @@ void loop() {
     } else {
       led_indicate_not_ready();
       stopRadio();
+      validateStatus(); // delete me
     }
   }
-  #ifdef ESP32
-  //buffer_serial(); // todo find issue with timerinterupt routine
-  #endif
   if (!fifo_isempty_locked(&serialFIFO)) serial_poll();
+  #ifdef ESP32
+  if (bytes_recived != 0){
+    draw_info("rssi: "+String(last_rssi),0,false);
+    draw_info("recived: "+String(bytes_recived),6,true);
+    bytes_recived = 0;
+  }
+  #endif
 }
 
 volatile bool serial_polling = false;

@@ -68,7 +68,7 @@ LoRaClass::LoRaClass() :
   setTimeout(0);
 }
 
-int LoRaClass::begin(long frequency)
+int16_t LoRaClass::begin(int32_t frequency)
 {
   // setup pins
   pinMode(_ss, OUTPUT);
@@ -128,7 +128,7 @@ void LoRaClass::end()
   SPI.end();
 }
 
-int LoRaClass::beginPacket(int implicitHeader)
+int16_t LoRaClass::beginPacket(int16_t implicitHeader)
 {
   // put in standby mode
   idle();
@@ -146,7 +146,7 @@ int LoRaClass::beginPacket(int implicitHeader)
   return 1;
 }
 
-int LoRaClass::endPacket()
+int16_t LoRaClass::endPacket()
 {
   // put in TX mode
   writeRegister(REG_OP_MODE, MODE_LONG_RANGE_MODE | MODE_TX);
@@ -162,10 +162,10 @@ int LoRaClass::endPacket()
   return 1;
 }
 
-int LoRaClass::parsePacket(int size)
+int16_t LoRaClass::parsePacket(int16_t size)
 {
-  int packetLength = 0;
-  int irqFlags = readRegister(REG_IRQ_FLAGS);
+  int16_t packetLength = 0;
+  int16_t irqFlags = readRegister(REG_IRQ_FLAGS);
 
   if (size > 0) {
     implicitHeaderMode();
@@ -216,9 +216,9 @@ uint8_t LoRaClass::packetRssiRaw() {
   return pkt_rssi_value;
 }
 
-int LoRaClass::packetRssi() {
+int16_t LoRaClass::packetRssi() {
   int8_t snr=0;
-  int pkt_rssi = (int)readRegister(REG_PKT_RSSI_VALUE) - RSSI_OFFSET;
+  int16_t pkt_rssi = (int16_t)readRegister(REG_PKT_RSSI_VALUE) - RSSI_OFFSET;
   int16_t pkt_snr = packetSnrRaw();
   if( pkt_snr & 0x80 ) // The SNR sign bit is 1
     {
@@ -239,7 +239,7 @@ int LoRaClass::packetRssi() {
     // Slope correction is (16/15)*pkt_rssi,
     // this estimation looses one floating point
     // operation, and should be precise enough.
-    pkt_rssi = (int)(1.066 * pkt_rssi);
+    pkt_rssi = (int16_t)(1.066 * pkt_rssi);
   }
 
   return pkt_rssi;
@@ -253,7 +253,7 @@ float LoRaClass::packetSnr() {
   return ((int8_t)readRegister(REG_PKT_SNR_VALUE)) * 0.25;
 }
 
-long LoRaClass::packetFrequencyError()
+int32_t LoRaClass::packetFrequencyError()
 {
   int32_t freqError = 0;
   freqError = static_cast<int32_t>(readRegister(REG_FREQ_ERROR_MSB) & B111);
@@ -272,7 +272,7 @@ long LoRaClass::packetFrequencyError()
   #endif
   const float fError = ((static_cast<float>(freqError) * (1L << 24)) / fXtal) * (getSignalBandwidth() / 500000.0f); // p. 37
 
-  return static_cast<long>(fError);
+  return static_cast<int32_t>(fError);
 }
 
 size_t LoRaClass::write(uint8_t byte)
@@ -282,7 +282,7 @@ size_t LoRaClass::write(uint8_t byte)
 
 size_t LoRaClass::write(const uint8_t *buffer, size_t size)
 {
-  int currentLength = readRegister(REG_PAYLOAD_LENGTH);
+  int16_t currentLength = readRegister(REG_PAYLOAD_LENGTH);
 
   // check size
   if ((currentLength + size) > MAX_PKT_LENGTH) {
@@ -323,7 +323,7 @@ int LoRaClass::peek()
   }
 
   // store current FIFO address
-  int currentAddress = readRegister(REG_FIFO_ADDR_PTR);
+  int16_t currentAddress = readRegister(REG_FIFO_ADDR_PTR);
 
   // read
   uint8_t b = readRegister(REG_FIFO);
@@ -338,7 +338,7 @@ void LoRaClass::flush()
 {
 }
 
-void LoRaClass::onReceive(void(*callback)(int))
+void LoRaClass::onReceive(void(*callback)(int16_t))
 {
   _onReceive = callback;
 
@@ -358,7 +358,7 @@ void LoRaClass::onReceive(void(*callback)(int))
   }
 }
 
-void LoRaClass::receive(int size)
+void LoRaClass::receive(int16_t size)
 {
   if (size > 0) {
     implicitHeaderMode();
@@ -381,7 +381,7 @@ void LoRaClass::sleep()
   writeRegister(REG_OP_MODE, MODE_LONG_RANGE_MODE | MODE_SLEEP);
 }
 
-void LoRaClass::setTxPower(int level, int outputPin) {
+void LoRaClass::setTxPower(int16_t level, int16_t outputPin) {
   if (PA_OUTPUT_RFO_PIN == outputPin) {
     // RFO
     if (level < 0) {
@@ -404,7 +404,7 @@ void LoRaClass::setTxPower(int level, int outputPin) {
   }
 }
 
-void LoRaClass::setFrequency(long frequency) {
+void LoRaClass::setFrequency(int32_t frequency) {
   _frequency = frequency;
 
   uint32_t frf = ((uint64_t)frequency << 19) / 32000000;
@@ -426,7 +426,7 @@ uint32_t LoRaClass::getFrequency() {
   return frequency;
 }
 
-void LoRaClass::setSpreadingFactor(int sf)
+void LoRaClass::setSpreadingFactor(int16_t sf)
 {
   if (sf < 6) {
     sf = 6;
@@ -447,7 +447,7 @@ void LoRaClass::setSpreadingFactor(int sf)
   handleLowDataRate();
 }
 
-long LoRaClass::getSignalBandwidth()
+int32_t LoRaClass::getSignalBandwidth()
 {
   byte bw = (readRegister(REG_MODEM_CONFIG_1) >> 4);
   switch (bw) {
@@ -465,8 +465,8 @@ long LoRaClass::getSignalBandwidth()
 }
 
 void LoRaClass::handleLowDataRate(){
-  int sf = (readRegister(REG_MODEM_CONFIG_2) >> 4);
-  if ( long( (1<<sf) / (getSignalBandwidth()/1000)) > 16) {
+  int16_t sf = (readRegister(REG_MODEM_CONFIG_2) >> 4);
+  if ( int32_t( (1<<sf) / (getSignalBandwidth()/1000)) > 16) {
     // set auto AGC and LowDataRateOptimize
     writeRegister(REG_MODEM_CONFIG_3, (1<<3)|(1<<2));
   }
@@ -476,9 +476,9 @@ void LoRaClass::handleLowDataRate(){
   }
 }
 
-void LoRaClass::setSignalBandwidth(long sbw)
+void LoRaClass::setSignalBandwidth(int32_t sbw)
 {
-  int bw;
+  int16_t bw;
 
   if (sbw <= 7.8E3) {
     bw = 0;
@@ -507,7 +507,7 @@ void LoRaClass::setSignalBandwidth(long sbw)
   handleLowDataRate();
 }
 
-void LoRaClass::setCodingRate4(int denominator)
+void LoRaClass::setCodingRate4(int16_t denominator)
 {
   if (denominator < 5) {
     denominator = 5;
@@ -515,18 +515,18 @@ void LoRaClass::setCodingRate4(int denominator)
     denominator = 8;
   }
 
-  int cr = denominator - 4;
+  int16_t cr = denominator - 4;
 
   writeRegister(REG_MODEM_CONFIG_1, (readRegister(REG_MODEM_CONFIG_1) & 0xf1) | (cr << 1));
 }
 
-void LoRaClass::setPreambleLength(long length)
+void LoRaClass::setPreambleLength(int32_t length)
 {
   writeRegister(REG_PREAMBLE_MSB, (uint8_t)(length >> 8));
   writeRegister(REG_PREAMBLE_LSB, (uint8_t)(length >> 0));
 }
 
-void LoRaClass::setSyncWord(int sw)
+void LoRaClass::setSyncWord(int16_t sw)
 {
   writeRegister(REG_SYNC_WORD, sw);
 }
@@ -546,7 +546,7 @@ byte LoRaClass::random()
   return readRegister(REG_RSSI_WIDEBAND);
 }
 
-void LoRaClass::setPins(int ss, int reset, int dio0)
+void LoRaClass::setPins(int16_t ss, int16_t reset, int16_t dio0)
 {
   _ss = ss;
   _reset = reset;
@@ -560,7 +560,7 @@ void LoRaClass::setSPIFrequency(uint32_t frequency)
 
 void LoRaClass::dumpRegisters(Stream& out)
 {
-  for (int i = 0; i < 128; i++) {
+  for (int16_t i = 0; i < 128; i++) {
     out.print("0x");
     out.print(i, HEX);
     out.print(": 0x");
@@ -584,7 +584,7 @@ void LoRaClass::implicitHeaderMode()
 
 void LoRaClass::handleDio0Rise()
 {
-  int irqFlags = readRegister(REG_IRQ_FLAGS);
+  int16_t irqFlags = readRegister(REG_IRQ_FLAGS);
 
   // clear IRQ's
   writeRegister(REG_IRQ_FLAGS, irqFlags);
@@ -594,7 +594,7 @@ void LoRaClass::handleDio0Rise()
     _packetIndex = 0;
 
     // read packet length
-    int packetLength = _implicitHeaderMode ? readRegister(REG_PAYLOAD_LENGTH) : readRegister(REG_RX_NB_BYTES);
+    int16_t packetLength = _implicitHeaderMode ? readRegister(REG_PAYLOAD_LENGTH) : readRegister(REG_RX_NB_BYTES);
 
     // set FIFO address to current RX address
     writeRegister(REG_FIFO_ADDR_PTR, readRegister(REG_FIFO_RX_CURRENT_ADDR));

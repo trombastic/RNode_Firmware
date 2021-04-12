@@ -29,18 +29,18 @@ class LoRaClass : public Stream {
 public:
   LoRaClass();
 
-  int begin(long frequency);
+  int16_t begin(int32_t frequency);
   void end();
 
-  int beginPacket(int implicitHeader = false);
-  int endPacket();
+  int16_t beginPacket(int16_t implicitHeader = false);
+  int16_t endPacket();
 
-  int parsePacket(int size = 0);
-  int packetRssi();
+  int16_t parsePacket(int16_t size = 0);
+  int16_t packetRssi();
   uint8_t packetRssiRaw();
   uint8_t packetSnrRaw();
   float packetSnr();
-  long packetFrequencyError();
+  int32_t packetFrequencyError();
 
   // from Print
   virtual size_t write(uint8_t byte);
@@ -52,21 +52,21 @@ public:
   virtual int peek();
   virtual void flush();
 
-  void onReceive(void(*callback)(int));
+  void onReceive(void(*callback)(int16_t));
 
-  void receive(int size = 0);
+  void receive(int16_t size = 0);
   void idle();
   void sleep();
 
-  void setTxPower(int level, int outputPin = PA_OUTPUT_PA_BOOST_PIN);
+  void setTxPower(int16_t level, int16_t outputPin = PA_OUTPUT_PA_BOOST_PIN);
   uint32_t getFrequency();
-  void setFrequency(long frequency);
-  void setSpreadingFactor(int sf);
-  long getSignalBandwidth();
-  void setSignalBandwidth(long sbw);
-  void setCodingRate4(int denominator);
-  void setPreambleLength(long length);
-  void setSyncWord(int sw);
+  void setFrequency(int32_t frequency);
+  void setSpreadingFactor(int16_t sf);
+  int32_t getSignalBandwidth();
+  void setSignalBandwidth(int32_t sbw);
+  void setCodingRate4(int16_t denominator);
+  void setPreambleLength(int32_t length);
+  void setSyncWord(int16_t sw);
   uint8_t modemStatus();
   void enableCrc();
   void disableCrc();
@@ -77,7 +77,7 @@ public:
 
   byte random();
 
-  void setPins(int ss = LORA_DEFAULT_SS_PIN, int reset = LORA_DEFAULT_RESET_PIN, int dio0 = LORA_DEFAULT_DIO0_PIN);
+  void setPins(int16_t ss = LORA_DEFAULT_SS_PIN, int16_t reset = LORA_DEFAULT_RESET_PIN, int16_t dio0 = LORA_DEFAULT_DIO0_PIN);
   void setSPIFrequency(uint32_t frequency);
 
   void dumpRegisters(Stream& out);
@@ -98,13 +98,13 @@ private:
 
 private:
   SPISettings _spiSettings;
-  int _ss;
-  int _reset;
-  int _dio0;
-  long _frequency;
-  int _packetIndex;
-  int _implicitHeaderMode;
-  void (*_onReceive)(int);
+  int16_t _ss;
+  int16_t _reset;
+  int16_t _dio0;
+  int32_t _frequency;
+  int16_t _packetIndex;
+  int16_t _implicitHeaderMode;
+  void (*_onReceive)(int16_t);
 };
 
 extern LoRaClass LoRa;

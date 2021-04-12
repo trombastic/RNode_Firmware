@@ -6,11 +6,11 @@ MD5::MD5()
 	return;
 }
 
-char* IRAM_ATTR MD5::make_digest(const unsigned char *digest, int len) /* {{{ */
+char* IRAM_ATTR MD5::make_digest(const unsigned char *digest, int16_t len) /* {{{ */
 {
 	char * md5str = (char*) malloc(sizeof(char)*(len*2+1));
 	static const char hexits[17] = "0123456789abcdef";
-	int i;
+	int16_t i;
 
 	for (i = 0; i < len; i++) {
 		md5str[i * 2]       = hexits[digest[i] >> 4];

@@ -22,9 +22,35 @@ void draw_info(String text, uint8_t line, bool draw_now){
   display.setTextSize(0);
   display.setTextColor(SSD1306_WHITE);
   display.println(text);
-  if(draw_now){
+  if (draw_now) {
     display.display(); // drawing commands to make them visible on screen!
   }
+}
+
+uint8_t getPrefByte(int16_t addr, uint8_t default_val) {
+  return prefbuf[addr];
+  //char cstr[16];
+  //sprintf(cstr, "%05d", adr);
+  //uint8_t data = preferences.getUChar(cstr, default_val);
+  //return data;
+}
+
+void putPrefByte(int16_t adr, uint8_t val) {
+  //char cstr[16];
+  //sprintf(cstr, "%05d", adr);
+  //draw_info(cstr,1,false);
+  //draw_info(String(val),0,true);
+  prefbuf[adr] = val;
+  //prefbuf_update = true;
+  //size_t ok = preferences.putUChar(cstr, val);
+}
+
+boolean checkPref(int16_t adr, uint8_t val) {
+  uint8_t data = getPrefByte(adr, 0);
+  if (data != val) {
+    putPrefByte(adr, val);
+  }
+  return data == val;
 }
 #endif
 
@@ -75,8 +101,8 @@ uint8_t led_standby_min = 1;
 uint8_t led_standby_max = 40;
 uint8_t led_standby_value = led_standby_min;
 int8_t  led_standby_direction = 0;
-unsigned long led_standby_ticks = 0;
-unsigned long led_standby_wait = 11000;
+uint32_t led_standby_ticks = 0;
+uint32_t led_standby_wait = 11000;
 void led_indicate_standby() {
 	led_standby_ticks++;
 	if (led_standby_ticks > led_standby_wait) {
@@ -306,14 +332,14 @@ void set_implicit_length(uint8_t len) {
 }
 
 void setTXPower() {
-	if (radio_online) {
-		if (model == MODEL_A4) LoRa.setTxPower(lora_txp, PA_OUTPUT_RFO_PIN);
-		if (model == MODEL_A9) LoRa.setTxPower(lora_txp, PA_OUTPUT_PA_BOOST_PIN);
-   	if (model == MODEL_B1) LoRa.setTxPower(lora_txp, PA_OUTPUT_RFO_PIN);
-    #ifdef ESP32
-    draw_info("txp: "+String(lora_txp),3,true);
-    #endif
-	}
+  if (radio_online) {
+    if (model == MODEL_A4) LoRa.setTxPower(lora_txp, PA_OUTPUT_RFO_PIN);
+    if (model == MODEL_A9) LoRa.setTxPower(lora_txp, PA_OUTPUT_PA_BOOST_PIN);
+    if (model == MODEL_B1) LoRa.setTxPower(lora_txp, PA_OUTPUT_PA_BOOST_PIN);
+#ifdef ESP32
+    draw_info("txp: " + String(lora_txp), 3, true);
+#endif
+  }
 }
 
 
@@ -366,49 +392,49 @@ void promisc_disable() {
 }
 
 bool eeprom_info_locked() {
-  #if defined(ESP32)
-    uint8_t lock_byte = preferences.getChar("EEPROM_"+eeprom_addr(ADDR_INFO_LOCK), 0x00);
-  #else
-	  uint8_t lock_byte = EEPROM.read(eeprom_addr(ADDR_INFO_LOCK));
-  #endif
-	if (lock_byte == INFO_LOCK_BYTE) {
-		return true;
-	} else {
-		return false;
-	}
+#if defined(ESP32)
+  uint8_t lock_byte = getPrefByte(ADDR_INFO_LOCK, 0);
+#else
+  uint8_t lock_byte = EEPROM.read(eeprom_addr(ADDR_INFO_LOCK));
+#endif
+  if (lock_byte == INFO_LOCK_BYTE) {
+    return true;
+  } else {
+    return false;
+  }
 }
 
 void eeprom_dump_info() {
-	for (int addr = ADDR_PRODUCT; addr <= ADDR_INFO_LOCK; addr++) {
-    #if defined(ESP32)
-    uint8_t byte = preferences.getChar("EEPROM_"+eeprom_addr(addr), 0);
-    #else
-		uint8_t byte = EEPROM.read(eeprom_addr(addr));
-    #endif
-		escapedSerialWrite(byte);
-	}
+  for (int16_t addr = ADDR_PRODUCT; addr <= ADDR_INFO_LOCK; addr++) {
+#if defined(ESP32)
+    uint8_t byte = getPrefByte(addr, 0);
+#else
+    uint8_t byte = EEPROM.read(eeprom_addr(addr));
+#endif
+    escapedSerialWrite(byte);
+  }
 }
 
 void eeprom_dump_config() {
-	for (int addr = ADDR_CONF_SF; addr <= ADDR_CONF_OK; addr++) {
-    #if defined(ESP32)
-    uint8_t byte = preferences.getChar("EEPROM_"+eeprom_addr(addr), 0);
-    #else
-		uint8_t byte = EEPROM.read(eeprom_addr(addr));
-		#endif
-		escapedSerialWrite(byte);
-	}
+  for (int16_t addr = ADDR_CONF_SF; addr <= ADDR_CONF_OK; addr++) {
+#if defined(ESP32)
+    uint8_t byte = getPrefByte(addr, 0);
+#else
+    uint8_t byte = EEPROM.read(eeprom_addr(addr));
+#endif
+    escapedSerialWrite(byte);
+  }
 }
 
 void eeprom_dump_all() {
-	for (int addr = 0; addr < EEPROM_RESERVED; addr++) {
-    #if defined(ESP32)
-      uint8_t byte = preferences.getChar("EEPROM_"+eeprom_addr(addr), 0);
-    #else
-		  uint8_t byte = EEPROM.read(eeprom_addr(addr));
-    #endif
-		escapedSerialWrite(byte);
-	}
+  for (int16_t addr = 0; addr < EEPROM_RESERVED; addr++) {
+#if defined(ESP32)
+    uint8_t byte = getPrefByte(addr, 0);
+#else
+    uint8_t byte = EEPROM.read(eeprom_addr(addr));
+#endif
+    escapedSerialWrite(byte);
+  }
 }
 
 void kiss_dump_eeprom() {
@@ -418,49 +444,52 @@ void kiss_dump_eeprom() {
 	Serial.write(FEND);
 }
 
-void eeprom_write(uint8_t addr, uint8_t byte) {
-	if (!eeprom_info_locked() && addr >= 0 && addr < EEPROM_RESERVED) {
-	#if defined(ESP32)
-    preferences.putChar("EEPROM_"+eeprom_addr(addr), byte);
-	#else
-		EEPROM.update(eeprom_addr(addr), byte);
-  #endif
-	} else {
-		kiss_indicate_error(ERROR_EEPROM_LOCKED);
-	}
+void eeprom_write(uint8_t addr, uint8_t wbyte) {
+  if (!eeprom_info_locked() && addr >= 0 && addr < EEPROM_RESERVED) {
+#ifdef ESP32
+    putPrefByte((int16_t)addr, wbyte);
+#else
+    EEPROM.update(eeprom_addr(addr), wbyte);
+#endif
+  } else {
+    kiss_indicate_error(ERROR_EEPROM_LOCKED);
+  }
 }
 
 void eeprom_erase() {
-	for (int addr = 0; addr < EEPROM_RESERVED; addr++) {
-        #ifdef ESP32
-            preferences.putChar("EEPROM_"+eeprom_addr(addr), 0xFF);
-	      #else		
-            EEPROM.update(eeprom_addr(addr), 0xFF);
-        #endif
-	}
-	while (true) { led_tx_on(); led_rx_off(); }
+#ifdef ESP32
+  preferences.clear();
+#else
+  for (int16_t addr = 0; addr < EEPROM_RESERVED; addr++) {
+    EEPROM.update(eeprom_addr(addr), 0xFF);
+  }
+#endif
+  while (true) {
+    led_tx_on();
+    led_rx_off();
+  }
 }
 
 bool eeprom_lock_set() {
-  #if defined(ESP32)
-   uint8_t INFO_LOCK = preferences.getChar("EEPROM_"+eeprom_addr(ADDR_INFO_LOCK), INFO_LOCK_BYTE);
-   if (INFO_LOCK == INFO_LOCK_BYTE) {
-     return true;
-    } else {
-      return false;
-    }
-  #else
-  	if (EEPROM.read(eeprom_addr(ADDR_INFO_LOCK)) == INFO_LOCK_BYTE) {
-  		return true;
-  	} else {
-  		return false;
-  	}
-  #endif
+#if defined(ESP32)
+  uint8_t INFO_LOCK = getPrefByte(ADDR_INFO_LOCK, 0);
+  if (INFO_LOCK == INFO_LOCK_BYTE) {
+    return true;
+  } else {
+    return false;
+  }
+#else
+  if (EEPROM.read(eeprom_addr(ADDR_INFO_LOCK)) == INFO_LOCK_BYTE) {
+    return true;
+  } else {
+    return false;
+  }
+#endif
 }
 
 bool eeprom_product_valid() {
-   #if defined(ESP32)
-  uint8_t PRODUCT = preferences.getChar("EEPROM_"+eeprom_addr(ADDR_PRODUCT), PRODUCT_RNODE);
+#if defined(ESP32)
+  uint8_t PRODUCT = getPrefByte(ADDR_PRODUCT, 0);
   if (PRODUCT == PRODUCT_RNODE) {
     return true;
   } else {
@@ -477,152 +506,152 @@ bool eeprom_product_valid() {
 }
 
 bool eeprom_model_valid() {
-  #if defined(ESP32)
-    model = preferences.getChar("EEPROM_"+eeprom_addr(ADDR_MODEL), MODEL_B1);
-  #else
-	  model = EEPROM.read(eeprom_addr(ADDR_MODEL));
-  #endif
-	if (model == MODEL_A4 || model == MODEL_A9 || model == MODEL_B1) {
-		return true;
-	} else {
-		return false;
-	}
+#if defined(ESP32)
+  model = getPrefByte(ADDR_MODEL, 0);
+#else
+  model = EEPROM.read(eeprom_addr(ADDR_MODEL));
+#endif
+  if (model == MODEL_A4 || model == MODEL_A9 || model == MODEL_B1) {
+    return true;
+  } else {
+    return false;
+  }
 }
 
 bool eeprom_hwrev_valid() {
-  #if defined(ESP32)
-    hwrev = preferences.getChar("EEPROM_"+eeprom_addr(ADDR_HW_REV), 0x01);
-  #else
-	  hwrev = EEPROM.read(eeprom_addr(ADDR_HW_REV));
-  #endif
-	if (hwrev != 0x00 && hwrev != 0xFF) {
-		return true;
-	} else {
-		return false;
-	}
+#if defined(ESP32)
+  hwrev = getPrefByte(ADDR_HW_REV, 0);
+#else
+  hwrev = EEPROM.read(eeprom_addr(ADDR_HW_REV));
+#endif
+  if (hwrev != 0x00 && hwrev != 0xFF) {
+    return true;
+  } else {
+    return false;
+  }
+}
+
+unsigned char* eeprom_checksum_calc() {
+  char *data = (char*)malloc(CHECKSUMMED_SIZE);
+  for (uint8_t  i = 0; i < CHECKSUMMED_SIZE; i++) {
+#if defined(ESP32)
+    char byte = getPrefByte(i, 0);
+#else
+    char byte = EEPROM.read(eeprom_addr(i));
+#endif
+    data[i] = byte;
+  }
+
+  unsigned char *hash = MD5::make_hash(data, CHECKSUMMED_SIZE);
+  free(data);
+  return hash;
 }
 
 bool eeprom_checksum_valid() {
-	char *data = (char*)malloc(CHECKSUMMED_SIZE);
-	for (uint8_t  i = 0; i < CHECKSUMMED_SIZE; i++) {
-    #if defined(ESP32)
-    char byte = preferences.getChar("EEPROM_"+eeprom_addr(i), 0);
-    #else
-		char byte = EEPROM.read(eeprom_addr(i));
-    #endif
-		data[i] = byte;
-	}
-	
-	unsigned char *hash = MD5::make_hash(data, CHECKSUMMED_SIZE);
-	bool checksum_valid = true;
-	for (uint8_t i = 0; i < 16; i++) {
-    #if defined(ESP32)
-    uint8_t stored_chk_byte = preferences.getChar("EEPROM_"+eeprom_addr(ADDR_CHKSUM+i), 0);
-    #else
-		uint8_t stored_chk_byte = EEPROM.read(eeprom_addr(ADDR_CHKSUM+i));
-    #endif
-		uint8_t calced_chk_byte = (uint8_t)hash[i];
-		if (stored_chk_byte != calced_chk_byte) {
-			checksum_valid = false;
-		}
-	}
-
-	free(hash);
-	free(data);
- #if defined(ESP32)
- return true; //fixme
- #else
-	return checksum_valid;
-  #endif
+  unsigned char *hash = eeprom_checksum_calc();
+  bool checksum_valid = true;
+  for (uint8_t i = 0; i < CHECKSUMMED_SIZE; i++) {
+#if defined(ESP32)
+    uint8_t stored_chk_byte = getPrefByte(ADDR_CHKSUM + i, 0);
+#else
+    uint8_t stored_chk_byte = EEPROM.read(eeprom_addr(ADDR_CHKSUM + i));
+#endif
+    uint8_t calced_chk_byte = (uint8_t)hash[i];
+    if (stored_chk_byte != calced_chk_byte) {
+      checksum_valid = false;
+    }
+  }
+  free(hash);
+  return checksum_valid;
 }
 
 bool eeprom_have_conf() {
-  #if defined(ESP32)
-  uint8_t CONF_OK = preferences.getChar("EEPROM_"+eeprom_addr(ADDR_CONF_OK), 0x00);
+#if defined(ESP32)
+  uint8_t CONF_OK = getPrefByte(ADDR_CONF_OK, 0x00);
   if (CONF_OK == CONF_OK_BYTE) {
     return true;
   } else {
     return false;
   }
-  #else
-	if (EEPROM.read(eeprom_addr(ADDR_CONF_OK)) == CONF_OK_BYTE) {
-		return true;
-	} else {
-		return false;
-	}
- #endif
+#else
+  if (EEPROM.read(eeprom_addr(ADDR_CONF_OK)) == CONF_OK_BYTE) {
+    return true;
+  } else {
+    return false;
+  }
+#endif
 }
 
 void eeprom_conf_load() {
-	if (eeprom_have_conf()) {
-  #if defined(ESP32)
-    lora_sf = preferences.getChar("EEPROM_"+eeprom_addr(ADDR_CONF_SF),lora_sf);
-    lora_cr = preferences.getChar("EEPROM_"+eeprom_addr(ADDR_CONF_CR),lora_cr);
-    lora_txp = preferences.getChar("EEPROM_"+eeprom_addr(ADDR_CONF_TXP),lora_txp);
-    lora_freq = (uint32_t)preferences.getChar("EEPROM_"+eeprom_addr(ADDR_CONF_FREQ)+0x00,lora_freq>>24) << 24 | (uint32_t)preferences.getChar("EEPROM_"+eeprom_addr(ADDR_CONF_FREQ)+0x01,lora_freq>>16) << 16 | (uint32_t)preferences.getChar("EEPROM_"+eeprom_addr(ADDR_CONF_FREQ)+0x02,lora_freq>>8) << 8 | (uint32_t)preferences.getChar("EEPROM_"+eeprom_addr(ADDR_CONF_FREQ)+0x03,lora_freq);
-    lora_bw = (uint32_t)preferences.getChar("EEPROM_"+eeprom_addr(ADDR_CONF_BW)+0x00,lora_bw>>24) << 24 | (uint32_t)preferences.getChar("EEPROM_"+eeprom_addr(ADDR_CONF_BW)+0x01,lora_bw>>16) << 16 | (uint32_t)preferences.getChar("EEPROM_"+eeprom_addr(ADDR_CONF_BW)+0x02,lora_bw>>8) << 8 | (uint32_t)preferences.getChar("EEPROM_"+eeprom_addr(ADDR_CONF_BW)+0x03,lora_bw);
-  #else
-		lora_sf = EEPROM.read(eeprom_addr(ADDR_CONF_SF));
-		lora_cr = EEPROM.read(eeprom_addr(ADDR_CONF_CR));
-		lora_txp = EEPROM.read(eeprom_addr(ADDR_CONF_TXP));
-		lora_freq = (uint32_t)EEPROM.read(eeprom_addr(ADDR_CONF_FREQ)+0x00) << 24 | (uint32_t)EEPROM.read(eeprom_addr(ADDR_CONF_FREQ)+0x01) << 16 | (uint32_t)EEPROM.read(eeprom_addr(ADDR_CONF_FREQ)+0x02) << 8 | (uint32_t)EEPROM.read(eeprom_addr(ADDR_CONF_FREQ)+0x03);
-		lora_bw = (uint32_t)EEPROM.read(eeprom_addr(ADDR_CONF_BW)+0x00) << 24 | (uint32_t)EEPROM.read(eeprom_addr(ADDR_CONF_BW)+0x01) << 16 | (uint32_t)EEPROM.read(eeprom_addr(ADDR_CONF_BW)+0x02) << 8 | (uint32_t)EEPROM.read(eeprom_addr(ADDR_CONF_BW)+0x03);
-   #endif
-	}
+  if (eeprom_have_conf()) {
+#if defined(ESP32)
+    lora_sf = getPrefByte(ADDR_CONF_SF, 0);
+    lora_cr = getPrefByte(ADDR_CONF_CR, 0);
+    lora_txp = getPrefByte(ADDR_CONF_TXP, 0);
+    lora_freq = (uint32_t)getPrefByte(ADDR_CONF_FREQ, 0) << 24 | (uint32_t)getPrefByte(ADDR_CONF_FREQ + 0x01, 0) << 16 | (uint32_t)getPrefByte(ADDR_CONF_FREQ + 0x02, 0) << 8 | (uint32_t)getPrefByte(ADDR_CONF_FREQ + 0x03, 0);
+    lora_bw = (uint32_t)getPrefByte(ADDR_CONF_BW, 0) << 24 | (uint32_t)getPrefByte(ADDR_CONF_BW + 0x01, 0) << 16 | (uint32_t)getPrefByte(ADDR_CONF_BW + 0x02, 0) << 8 | (uint32_t)getPrefByte(ADDR_CONF_BW + 0x03, 0);
+#else
+    lora_sf = EEPROM.read(eeprom_addr(ADDR_CONF_SF));
+    lora_cr = EEPROM.read(eeprom_addr(ADDR_CONF_CR));
+    lora_txp = EEPROM.read(eeprom_addr(ADDR_CONF_TXP));
+    lora_freq = (uint32_t)EEPROM.read(eeprom_addr(ADDR_CONF_FREQ) + 0x00) << 24 | (uint32_t)EEPROM.read(eeprom_addr(ADDR_CONF_FREQ) + 0x01) << 16 | (uint32_t)EEPROM.read(eeprom_addr(ADDR_CONF_FREQ) + 0x02) << 8 | (uint32_t)EEPROM.read(eeprom_addr(ADDR_CONF_FREQ) + 0x03);
+    lora_bw = (uint32_t)EEPROM.read(eeprom_addr(ADDR_CONF_BW) + 0x00) << 24 | (uint32_t)EEPROM.read(eeprom_addr(ADDR_CONF_BW) + 0x01) << 16 | (uint32_t)EEPROM.read(eeprom_addr(ADDR_CONF_BW) + 0x02) << 8 | (uint32_t)EEPROM.read(eeprom_addr(ADDR_CONF_BW) + 0x03);
+#endif
+  }
 }
 
 void eeprom_conf_save() {
-	if (hw_ready && radio_online) {
-	#if defined(ESP32)
-	  preferences.putChar("EEPROM_"+eeprom_addr(ADDR_CONF_SF), lora_sf);
-    preferences.putChar("EEPROM_"+eeprom_addr(ADDR_CONF_CR), lora_cr);
-    preferences.putChar("EEPROM_"+eeprom_addr(ADDR_CONF_TXP), lora_txp);
+  if (hw_ready && radio_online) {
+#if defined(ESP32)
+    putPrefByte(ADDR_CONF_SF, lora_sf);
+    putPrefByte(ADDR_CONF_CR, lora_cr);
+    putPrefByte(ADDR_CONF_TXP, lora_txp);
 
-    preferences.putChar("EEPROM_"+eeprom_addr(ADDR_CONF_BW)+0x00, lora_bw>>24);
-    preferences.putChar("EEPROM_"+eeprom_addr(ADDR_CONF_BW)+0x01, lora_bw>>16);
-    preferences.putChar("EEPROM_"+eeprom_addr(ADDR_CONF_BW)+0x02, lora_bw>>8);
-    preferences.putChar("EEPROM_"+eeprom_addr(ADDR_CONF_BW)+0x03, lora_bw);
+    putPrefByte(ADDR_CONF_BW, lora_bw >> 24);
+    putPrefByte(ADDR_CONF_BW + 0x01, lora_bw >> 16);
+    putPrefByte(ADDR_CONF_BW + 0x02, lora_bw >> 8);
+    putPrefByte(ADDR_CONF_BW + 0x03, lora_bw);
 
-    preferences.putChar("EEPROM_"+eeprom_addr(ADDR_CONF_FREQ)+0x00, lora_freq>>24);
-    preferences.putChar("EEPROM_"+eeprom_addr(ADDR_CONF_FREQ)+0x01, lora_freq>>16);
-    preferences.putChar("EEPROM_"+eeprom_addr(ADDR_CONF_FREQ)+0x02, lora_freq>>8);
-    preferences.putChar("EEPROM_"+eeprom_addr(ADDR_CONF_FREQ)+0x03, lora_freq);
+    putPrefByte(ADDR_CONF_FREQ + 0x00, lora_freq >> 24);
+    putPrefByte(ADDR_CONF_FREQ + 0x01, lora_freq >> 16);
+    putPrefByte(ADDR_CONF_FREQ + 0x02, lora_freq >> 8);
+    putPrefByte(ADDR_CONF_FREQ + 0x03, lora_freq);
 
-    preferences.putChar("EEPROM_"+eeprom_addr(ADDR_CONF_OK), CONF_OK_BYTE);
-  #else
-		EEPROM.update(eeprom_addr(ADDR_CONF_SF), lora_sf);
-		EEPROM.update(eeprom_addr(ADDR_CONF_CR), lora_cr);
-		EEPROM.update(eeprom_addr(ADDR_CONF_TXP), lora_txp);
+    putPrefByte(ADDR_CONF_OK, CONF_OK_BYTE);
+#else
+    EEPROM.update(eeprom_addr(ADDR_CONF_SF), lora_sf);
+    EEPROM.update(eeprom_addr(ADDR_CONF_CR), lora_cr);
+    EEPROM.update(eeprom_addr(ADDR_CONF_TXP), lora_txp);
 
-		EEPROM.update(eeprom_addr(ADDR_CONF_BW)+0x00, lora_bw>>24);
-		EEPROM.update(eeprom_addr(ADDR_CONF_BW)+0x01, lora_bw>>16);
-		EEPROM.update(eeprom_addr(ADDR_CONF_BW)+0x02, lora_bw>>8);
-		EEPROM.update(eeprom_addr(ADDR_CONF_BW)+0x03, lora_bw);
+    EEPROM.update(eeprom_addr(ADDR_CONF_BW) + 0x00, lora_bw >> 24);
+    EEPROM.update(eeprom_addr(ADDR_CONF_BW) + 0x01, lora_bw >> 16);
+    EEPROM.update(eeprom_addr(ADDR_CONF_BW) + 0x02, lora_bw >> 8);
+    EEPROM.update(eeprom_addr(ADDR_CONF_BW) + 0x03, lora_bw);
 
-		EEPROM.update(eeprom_addr(ADDR_CONF_FREQ)+0x00, lora_freq>>24);
-		EEPROM.update(eeprom_addr(ADDR_CONF_FREQ)+0x01, lora_freq>>16);
-		EEPROM.update(eeprom_addr(ADDR_CONF_FREQ)+0x02, lora_freq>>8);
-		EEPROM.update(eeprom_addr(ADDR_CONF_FREQ)+0x03, lora_freq);
+    EEPROM.update(eeprom_addr(ADDR_CONF_FREQ) + 0x00, lora_freq >> 24);
+    EEPROM.update(eeprom_addr(ADDR_CONF_FREQ) + 0x01, lora_freq >> 16);
+    EEPROM.update(eeprom_addr(ADDR_CONF_FREQ) + 0x02, lora_freq >> 8);
+    EEPROM.update(eeprom_addr(ADDR_CONF_FREQ) + 0x03, lora_freq);
 
-		EEPROM.update(eeprom_addr(ADDR_CONF_OK), CONF_OK_BYTE);
-  	#endif
+    EEPROM.update(eeprom_addr(ADDR_CONF_OK), CONF_OK_BYTE);
+#endif
     led_indicate_info(10);
-	} else {
-		led_indicate_warning(10);
-	}
+  } else {
+    led_indicate_warning(10);
+  }
 }
 
 void eeprom_conf_delete() {
-	#if defined(ESP32)
-    preferences.putChar("EEPROM_"+eeprom_addr(ADDR_CONF_OK), 0x00);
-	#else
-    EEPROM.update(eeprom_addr(ADDR_CONF_OK), 0x00);
-	#endif
+#if defined(ESP32)
+  putPrefByte(ADDR_CONF_OK, 0x00);
+#else
+  EEPROM.update(eeprom_addr(ADDR_CONF_OK), 0x00);
+#endif
 }
 
 void unlock_rom() {
-	led_indicate_error(50);
-	eeprom_erase();
+  led_indicate_error(50);
+  eeprom_erase();
 }
 
 typedef struct FIFOBuffer
@@ -643,7 +672,7 @@ inline bool fifo_isfull(const FIFOBuffer *f) {
 
 inline void fifo_push(FIFOBuffer *f, unsigned char c) {
   *(f->tail) = c;
-  
+
   if (f->tail == f->end) {
     f->tail = f->begin;
   } else {
@@ -652,7 +681,7 @@ inline void fifo_push(FIFOBuffer *f, unsigned char c) {
 }
 
 inline unsigned char fifo_pop(FIFOBuffer *f) {
-  if(f->head == f->end) {
+  if (f->head == f->end) {
     f->head = f->begin;
     return *(f->end);
   } else {
@@ -666,55 +695,55 @@ inline void fifo_flush(FIFOBuffer *f) {
 
 static inline bool fifo_isempty_locked(const FIFOBuffer *f) {
   bool result;
-  #ifdef ESP32
-    portENTER_CRITICAL_ISR(&timerMux);
-    result = fifo_isempty(f);
-    portEXIT_CRITICAL_ISR(&timerMux);
-  #else
+#ifdef ESP32
+  portENTER_CRITICAL_ISR(&timerMux);
+  result = fifo_isempty(f);
+  portEXIT_CRITICAL_ISR(&timerMux);
+#else
   ATOMIC_BLOCK(ATOMIC_RESTORESTATE) {
     result = fifo_isempty(f);
   }
-  #endif
+#endif
   return result;
 }
 
 static inline bool fifo_isfull_locked(const FIFOBuffer *f) {
   bool result;
-  #ifdef ESP32
+#ifdef ESP32
   portENTER_CRITICAL_ISR(&timerMux);
   result = fifo_isfull(f);
   portEXIT_CRITICAL_ISR(&timerMux);
-  #else
+#else
   ATOMIC_BLOCK(ATOMIC_RESTORESTATE) {
     result = fifo_isfull(f);
   }
-  #endif
+#endif
   return result;
 }
 
 static inline void fifo_push_locked(FIFOBuffer *f, unsigned char c) {
-  #ifdef ESP32
+#ifdef ESP32
   portENTER_CRITICAL_ISR(&timerMux);
-    fifo_push(f, c);
+  fifo_push(f, c);
   portEXIT_CRITICAL_ISR(&timerMux);
-  #else
+#else
   ATOMIC_BLOCK(ATOMIC_RESTORESTATE) {
     fifo_push(f, c);
   }
-  #endif
+#endif
 }
 
 static inline unsigned char fifo_pop_locked(FIFOBuffer *f) {
   unsigned char c;
-  #ifdef ESP32
-    portENTER_CRITICAL_ISR(&timerMux);
+#ifdef ESP32
+  portENTER_CRITICAL_ISR(&timerMux);
+  c = fifo_pop(f);
+  portEXIT_CRITICAL_ISR(&timerMux);
+#else
+  ATOMIC_BLOCK(ATOMIC_RESTORESTATE) {
     c = fifo_pop(f);
-    portEXIT_CRITICAL_ISR(&timerMux);
-  #else
-    ATOMIC_BLOCK(ATOMIC_RESTORESTATE) {
-      c = fifo_pop(f);
-    }
-  #endif
+  }
+#endif
   return c;
 }
 
@@ -754,7 +783,7 @@ inline void fifo16_push(FIFOBuffer16 *f, size_t c) {
 }
 
 inline size_t fifo16_pop(FIFOBuffer16 *f) {
-  if(f->head == f->end) {
+  if (f->head == f->end) {
     f->head = f->begin;
     return *(f->end);
   } else {
@@ -768,55 +797,55 @@ inline void fifo16_flush(FIFOBuffer16 *f) {
 
 static inline bool fifo16_isempty_locked(const FIFOBuffer16 *f) {
   bool result;
-  #ifdef ESP32
-    portENTER_CRITICAL_ISR(&timerMux);
-    result = fifo16_isempty(f);
-    portEXIT_CRITICAL_ISR(&timerMux);
-  #else
+#ifdef ESP32
+  portENTER_CRITICAL_ISR(&timerMux);
+  result = fifo16_isempty(f);
+  portEXIT_CRITICAL_ISR(&timerMux);
+#else
   ATOMIC_BLOCK(ATOMIC_RESTORESTATE) {
     result = fifo16_isempty(f);
   }
-  #endif
+#endif
   return result;
 }
 
 static inline bool fifo16_isfull_locked(const FIFOBuffer16 *f) {
   bool result;
-  #ifdef ESP32
-    portENTER_CRITICAL_ISR(&timerMux);
-    result = fifo16_isfull(f);
-    portEXIT_CRITICAL_ISR(&timerMux);
-  #else
+#ifdef ESP32
+  portENTER_CRITICAL_ISR(&timerMux);
+  result = fifo16_isfull(f);
+  portEXIT_CRITICAL_ISR(&timerMux);
+#else
   ATOMIC_BLOCK(ATOMIC_RESTORESTATE) {
     result = fifo16_isfull(f);
   }
-  #endif
+#endif
   return result;
 }
 
 static inline void fifo16_push_locked(FIFOBuffer16 *f, size_t c) {
-  #ifdef ESP32
-    portENTER_CRITICAL_ISR(&timerMux);
-    fifo16_push(f, c);
-    portEXIT_CRITICAL_ISR(&timerMux);
-  #else
+#ifdef ESP32
+  portENTER_CRITICAL_ISR(&timerMux);
+  fifo16_push(f, c);
+  portEXIT_CRITICAL_ISR(&timerMux);
+#else
   ATOMIC_BLOCK(ATOMIC_RESTORESTATE) {
     fifo16_push(f, c);
   }
-  #endif
+#endif
 }
 
 static inline size_t fifo16_pop_locked(FIFOBuffer16 *f) {
   size_t c;
-  #ifdef ESP32
-    portENTER_CRITICAL_ISR(&timerMux);
-    c = fifo16_pop(f);
-    portEXIT_CRITICAL_ISR(&timerMux);
-  #else
+#ifdef ESP32
+  portENTER_CRITICAL_ISR(&timerMux);
+  c = fifo16_pop(f);
+  portEXIT_CRITICAL_ISR(&timerMux);
+#else
   ATOMIC_BLOCK(ATOMIC_RESTORESTATE) {
     c = fifo16_pop(f);
   }
-  #endif
+#endif
   return c;
 }
 
@@ -828,3 +857,41 @@ inline void fifo16_init(FIFOBuffer16 *f, size_t *buffer, size_t size) {
 inline size_t fifo16_len(FIFOBuffer16 *f) {
   return (f->end - f->begin);
 }
+
+#ifdef ESP32
+void load_defaults() {
+  //if (!checkPref(ADDR_INFO_LOCK,INFO_LOCK_BYTE)){
+  //preferences.clear();
+  putPrefByte(ADDR_PRODUCT, PRODUCT_RNODE);
+  putPrefByte(ADDR_MODEL, MODEL_B1);
+  putPrefByte(ADDR_HW_REV, 146);
+  putPrefByte(ADDR_SERIAL, 123);
+  putPrefByte(ADDR_SERIAL + 0x01, 123);
+  putPrefByte(ADDR_SERIAL + 0x02, 123);
+  putPrefByte(ADDR_SERIAL + 0x03, 123);
+  putPrefByte(ADDR_INFO_LOCK, INFO_LOCK_BYTE);
+//  putPrefByte(ADDR_CONF_SF, 0);
+//  putPrefByte(ADDR_CONF_CR, 0);
+//  putPrefByte(ADDR_CONF_TXP, 0);
+//
+//  putPrefByte(ADDR_CONF_SF, lora_sf);
+//  putPrefByte(ADDR_CONF_CR, lora_cr);
+//  putPrefByte(ADDR_CONF_TXP, lora_txp);
+//
+//  putPrefByte(ADDR_CONF_BW, lora_bw >> 24);
+//  putPrefByte(ADDR_CONF_BW + 0x01, lora_bw >> 16);
+//  putPrefByte(ADDR_CONF_BW + 0x02, lora_bw >> 8);
+//  putPrefByte(ADDR_CONF_BW + 0x03, lora_bw);
+//
+//  putPrefByte(ADDR_CONF_FREQ + 0x00, lora_freq >> 24);
+//  putPrefByte(ADDR_CONF_FREQ + 0x01, lora_freq >> 16);
+//  putPrefByte(ADDR_CONF_FREQ + 0x02, lora_freq >> 8);
+//  putPrefByte(ADDR_CONF_FREQ + 0x03, lora_freq);
+  unsigned char *hash = eeprom_checksum_calc();
+  for (uint8_t i = 0; i < CHECKSUMMED_SIZE; i++) {
+    putPrefByte(ADDR_CHKSUM + i, (uint8_t)hash[i]);
+  }
+  //putPrefByte(ADDR_CONF_OK, CONF_OK_BYTE);
+  //}
+}
+#endif
