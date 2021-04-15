@@ -74,11 +74,7 @@ public:
   void receive(int16_t size = 0);
   void idle();
   void sleep();
-  #ifdef ESP32
-  void setTxPower(int8_t power, int8_t outputPin = PA_OUTPUT_PA_BOOST_PIN);
-  #else
   void setTxPower(int16_t level, int16_t outputPin = PA_OUTPUT_PA_BOOST_PIN);
-  #endif
   uint32_t getFrequency();
   void setFrequency(int32_t frequency);
   void setSpreadingFactor(int16_t sf);
