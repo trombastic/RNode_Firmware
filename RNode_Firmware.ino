@@ -690,8 +690,17 @@ void loop() {
   if (bytes_received != 0){
     packets_received++;
     draw_info("rssi: "+String(last_rssi),0,false);
-    draw_info("received: "+String(bytes_received) + "(" + String(packets_received) + ")",6,true);
-    
+    draw_info("received: "+String(bytes_received) + "(" + String(packets_received) + ")",5,false);
+    char blestr[bytes_received];
+    for (size_t i; i < bytes_received; i++) {
+      char tmp = pbuf[i];
+      if (tmp>=32 & tmp<=126){
+        blestr[i] = tmp;
+      }else{
+        blestr[i] = 0;
+        }
+      }
+    draw_info(blestr,6,true);
     bytes_received = 0;
   }
   
