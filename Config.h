@@ -63,12 +63,9 @@
     volatile uint8_t prefbuf[EEPROM_SIZE];
     volatile boolean prefbuf_update = false;
 	#endif
-  
-  #ifdef ESP32
-    #define eeprom_addr(a) (a)
-  #else
-	  #define eeprom_addr(a) (a+EEPROM_OFFSET)
-  #endif
+
+  #define eeprom_addr(a) (a)
+
 	// MCU independent configuration parameters
 	const int32_t serial_baudrate  = 115200;
 	const int16_t lora_rx_turnaround_ms = 50;
@@ -78,9 +75,9 @@
 	const int16_t  rssi_offset      = 157;
 
 	// Default LoRa settings
-	int16_t  lora_sf   	   = 7;
-	int16_t  lora_cr       = 5;
-	int16_t  lora_txp      = 0x00;
+	int16_t  lora_sf   = 7;
+	int16_t  lora_cr   = 5;
+	int16_t  lora_txp  = 0x00;
 	uint32_t lora_bw   = 125000;
 	uint32_t lora_freq = 868000000;
 

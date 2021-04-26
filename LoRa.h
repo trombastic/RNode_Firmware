@@ -9,36 +9,28 @@
 
 #include <Arduino.h>
 #include <SPI.h>
-#if defined(__AVR_ATmega1284P__)
-    #define LORA_DEFAULT_SS_PIN    10
-    #define LORA_DEFAULT_RESET_PIN 9
-    #define LORA_DEFAULT_DIO0_PIN  2
-    #define PA_OUTPUT_RFO_PIN      0
-    #define PA_OUTPUT_PA_BOOST_PIN 1
-  #elif defined(ESP32)
-      #define LORA_DEFAULT_SS_PIN    18
-      #define LORA_DEFAULT_RESET_PIN 14
-      #define LORA_DEFAULT_DIO0_PIN  26
-      #define PA_OUTPUT_RFO_PIN      0
-      #define PA_OUTPUT_PA_BOOST_PIN 1
-      /*!
-       * RegPaDac
-       */
-      #define RF_PADAC_20DBM_MASK                         0xF8
-      #define RF_PADAC_20DBM_ON                           0x07
-      #define RF_PADAC_20DBM_OFF                          0x04  // Default
-      /*!
-       * RegPaConfig
-       */
-      #define RF_PACONFIG_PASELECT_MASK                   0x7F
-      #define RF_PACONFIG_PASELECT_PABOOST                0x80
-      #define RF_PACONFIG_PASELECT_RFO                    0x00 // Default
-      
-      #define RF_PACONFIG_MAX_POWER_MASK                  0x8F
-      
-      #define RF_PACONFIG_OUTPUTPOWER_MASK                0xF0
 
-  #endif
+#define LORA_DEFAULT_SS_PIN    18
+#define LORA_DEFAULT_RESET_PIN 14
+#define LORA_DEFAULT_DIO0_PIN  26
+#define PA_OUTPUT_RFO_PIN      0
+#define PA_OUTPUT_PA_BOOST_PIN 1
+/*!
+ * RegPaDac
+ */
+#define RF_PADAC_20DBM_MASK                         0xF8
+#define RF_PADAC_20DBM_ON                           0x07
+#define RF_PADAC_20DBM_OFF                          0x04  // Default
+/*!
+ * RegPaConfig
+ */
+#define RF_PACONFIG_PASELECT_MASK                   0x7F
+#define RF_PACONFIG_PASELECT_PABOOST                0x80
+#define RF_PACONFIG_PASELECT_RFO                    0x00 // Default
+
+#define RF_PACONFIG_MAX_POWER_MASK                  0x8F
+
+#define RF_PACONFIG_OUTPUTPOWER_MASK                0xF0
 
 #define RSSI_OFFSET 157
 

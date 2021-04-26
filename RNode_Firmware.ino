@@ -1,26 +1,38 @@
 #include <Arduino.h>
 #include <SPI.h>
 #include <Wire.h>
-#ifdef ESP32
-  #include <Wire.h>
-  #include <Adafruit_GFX.h>
-  #include <Adafruit_SSD1306.h>
+#include <Adafruit_GFX.h>
+#include <Adafruit_SSD1306.h>
 
+#define USE_OLED // Use the OLED Screen
+#define USE_UART // Use the Hardware UART instead of the USB Serial
+
+#ifdef USE_UART
+  #define UART_TX 17
+  #define UART_RX 2
+#endif
+
+
+HardwareSerial *port;
+
+#include <Preferences.h>
+Preferences preferences;
+hw_timer_t * timer = NULL;
+portMUX_TYPE timerMux = portMUX_INITIALIZER_UNLOCKED;
+
+#ifdef USE_OLED
   #define SCREEN_WIDTH 128 // OLED display width, in pixels
   #define SCREEN_HEIGHT 64 // OLED display height, in pixels
-  hw_timer_t * timer = NULL;
-  portMUX_TYPE timerMux = portMUX_INITIALIZER_UNLOCKED;
-  #include <Preferences.h>
-  Preferences preferences;
+
   #define OLED_RESET   16 // Reset pin # (or -1 if sharing Arduino reset pin)
   #define OLED_SDA     4 // Reset pin # (or -1 if sharing Arduino reset pin)
   #define OLED_SCL     15 // Reset pin # (or -1 if sharing Arduino reset pin)
-  
+
   #define SCREEN_ADDRESS 0x3C ///< See datasheet for Address; 0x3D for 128x64, 0x3C for 128x32
   TwoWire twi = TwoWire(1); // create our own TwoWire instance
   Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &twi, OLED_RESET);
-
 #endif
+
 #include "Utilities.h"
 FIFOBuffer serialFIFO;
 uint8_t serialBuffer[CONFIG_UART_BUFFER_SIZE+1];
@@ -38,10 +50,8 @@ volatile size_t queued_bytes = 0;
 volatile size_t queue_cursor = 0;
 volatile size_t current_packet_start = 0;
 volatile bool serial_buffering = false;
-#ifdef ESP32
 volatile int16_t bytes_received = 0;
 volatile int16_t packets_received = 0;
-#endif
 char sbuf[128];
 
 
@@ -52,18 +62,27 @@ void setup() {
   // Initialise serial communication
   memset(serialBuffer, 0, sizeof(serialBuffer));
   fifo_init(&serialFIFO, serialBuffer, CONFIG_UART_BUFFER_SIZE);
+  #ifdef USE_UART
+    port = &Serial1;
+    port->begin(serial_baudrate, SERIAL_8N1, UART_RX, UART_TX);
+    while (!Serial1);
+  #else
+    port = &Serial;
+    port->begin(serial_baudrate);
+    while (!Serial);
+  #endif
 
-  Serial.begin(serial_baudrate);
-  while (!Serial);
-  #ifdef ESP32
-    preferences.begin("RNode", false);
-    //preferences.clear();
-    pinMode(Vext,OUTPUT);
-    digitalWrite(Vext, LOW);
+  
+  preferences.begin("RNode", false);
+  //preferences.clear();
+  pinMode(Vext,OUTPUT);
+  digitalWrite(Vext, LOW);
+  #ifdef USE_OLED
     twi.begin(OLED_SDA,OLED_SCL);
     // SSD1306_SWITCHCAPVCC = generate display voltage from 3.3V internally
     if(!display.begin(SSD1306_SWITCHCAPVCC, SCREEN_ADDRESS)) {
-      Serial.println(F("SSD1306 allocation failed"));
+        port->println(F("SSD1306 allocation failed"));
+
       for(;;); // Don't proceed, loop forever
     }
     // Clear the buffer
@@ -75,9 +94,6 @@ void setup() {
     draw_info("sf: "+String(lora_sf),4,false);
     draw_info("cr: "+String(lora_cr),5,true);
     draw_info("status: offline",6,true);
-    //load_defaults();
-  #else
-    while (!Serial);
   #endif
   // Configure input and output pins
   pinMode(pin_led_rx, OUTPUT);
@@ -101,8 +117,6 @@ void setup() {
 
   led_indicate_info(2);
   delay(1000);
-
-  serial_interrupt_init();
 
   // Validate board health, EEPROM and config
   validateStatus();
@@ -128,7 +142,7 @@ bool startRadio() {
         led_indicate_error(0);
       } else {
         radio_online = true;
-        #ifdef ESP32
+        #ifdef USE_OLED
         draw_info("freq: "+String(lora_freq),2,false);
         #endif
         setTXPower();
@@ -145,7 +159,7 @@ bool startRadio() {
         // Flash an info pattern to indicate
         // that the radio is now on
         led_indicate_info(3);
-        #ifdef ESP32
+        #ifdef USE_OLED
         draw_info("promisc: "+String(promisc),0,false);
         draw_info("status: online",6,true);
         #endif
@@ -156,7 +170,7 @@ bool startRadio() {
       // that the radio was locked, and thus
       // not started
       led_indicate_warning(3);
-      #ifdef ESP32
+      #ifdef USE_OLED
       draw_info("status: offline",6,true);
       #endif
     }
@@ -169,7 +183,7 @@ bool startRadio() {
 void stopRadio() {
   LoRa.end();
   radio_online = false;
-  #ifdef ESP32
+  #ifdef USE_OLED
   draw_info("status: offline",6,true);
   #endif
 }
@@ -248,15 +262,15 @@ void receiveCallback(int16_t packet_size) {
       kiss_indicate_stat_snr();
 
       // And then write the entire packet
-      Serial.write(FEND);
-      Serial.write(CMD_DATA);
+      port->write(FEND);
+      port->write(CMD_DATA);
       for (int16_t i = 0; i < read_len; i++) {
         uint8_t byte = pbuf[i];
-        if (byte == FEND) { Serial.write(FESC); byte = TFEND; }
-        if (byte == FESC) { Serial.write(FESC); byte = TFESC; }
-        Serial.write(byte);
+        if (byte == FEND) { port->write(FESC); byte = TFEND; }
+        if (byte == FESC) { port->write(FESC); byte = TFESC; }
+        port->write(byte);
       }
-      Serial.write(FEND);
+      port->write(FEND);
       read_len = 0;
     }
   } else {
@@ -273,15 +287,15 @@ void receiveCallback(int16_t packet_size) {
     kiss_indicate_stat_snr();
 
     // And then write the entire packet
-    Serial.write(FEND);
-    Serial.write(CMD_DATA);
+    port->write(FEND);
+    port->write(CMD_DATA);
     for (int16_t i = 0; i < read_len; i++) {
       uint8_t byte = pbuf[i];
-      if (byte == FEND) { Serial.write(FESC); byte = TFEND; }
-      if (byte == FESC) { Serial.write(FESC); byte = TFESC; }
-      Serial.write(byte);
+      if (byte == FEND) { port->write(FESC); byte = TFEND; }
+      if (byte == FESC) { port->write(FESC); byte = TFESC; }
+      port->write(byte);
     }
-    Serial.write(FEND);
+    port->write(FEND);
     read_len = 0;
   }
 }
@@ -348,7 +362,7 @@ void transmit(size_t size) {
 
       LoRa.endPacket();
       led_tx_off();
-      #ifdef ESP32
+      #ifdef USE_OLED
       draw_info("transmit: "+String(written*written_wrap),6,true);
       #endif
       lora_receive();
@@ -378,7 +392,7 @@ void transmit(size_t size) {
       }
       LoRa.endPacket();
       led_tx_off();
-      #ifdef ESP32
+      #ifdef USE_OLED
       draw_info("transmit: "+String(written),6,true);
       #endif
       lora_receive();
@@ -556,7 +570,7 @@ void serialCallback(uint8_t sbyte) {
         promisc_disable();
       }
       kiss_indicate_promisc();
-      #ifdef ESP32
+      #ifdef USE_OLED
       draw_info("promisc: "+String(promisc),0,true);
       #endif
     } else if (command == CMD_READY) {
@@ -634,23 +648,12 @@ void checkModemStatus() {
 }
 
 void validateStatus() {
-  if (eeprom_lock_set()) {
-    if (eeprom_product_valid() && eeprom_model_valid() && eeprom_hwrev_valid()) {
-      if (eeprom_checksum_valid()) {
-        hw_ready = true;
-
-        if (eeprom_have_conf()) {
-          eeprom_conf_load();
-          op_mode = MODE_TNC;
-          startRadio();
-        }
-      }
-    } else {
-      hw_ready = false;
+    hw_ready = true;
+    if (eeprom_have_conf()) {
+      eeprom_conf_load();
+      op_mode = MODE_TNC;
+      startRadio();
     }
-  } else {
-    hw_ready = false;
-  }
 }
 
 void loop() {
@@ -686,7 +689,6 @@ void loop() {
     }
   }
   if (!fifo_isempty_locked(&serialFIFO)) serial_poll();
-  #ifdef ESP32
   if (bytes_received != 0){
     packets_received++;
     draw_info("rssi: "+String(last_rssi),0,false);
@@ -705,13 +707,12 @@ void loop() {
   }
   
   uint8_t  c = 0;
-  while (c < 20 && Serial.available()) {
+  while (c < 20 && port->available()) {
     c++;
     if (!fifo_isfull_locked(&serialFIFO)) {
-      fifo_push_locked(&serialFIFO, Serial.read());
+      fifo_push_locked(&serialFIFO, port->read());
     }
   }
-  #endif
 }
 
 volatile bool serial_polling = false;
@@ -727,54 +728,22 @@ void serial_poll() {
 }
 
 
-#ifdef ESP32
 #define MAX_CYCLES 20
 void IRAM_ATTR buffer_serial() {
   portENTER_CRITICAL_ISR(&timerMux);
-#else
-#define MAX_CYCLES 20
-void buffer_serial() {
-#endif
   if (!serial_buffering) {
     serial_buffering = true;
 
     uint8_t c = 0;
-    while (c < MAX_CYCLES && Serial.available()) {
+    while (c < MAX_CYCLES && port->available()) {
       c++;
 
       if (!fifo_isfull_locked(&serialFIFO)) {
-        fifo_push_locked(&serialFIFO, Serial.read());
+        fifo_push_locked(&serialFIFO, port->read());
       }
     }
 
     serial_buffering = false;
   }
-  #ifdef ESP32
   portEXIT_CRITICAL_ISR(&timerMux);
-  #endif
 }
-
-#ifdef ESP32
-void serial_interrupt_init() {
-    //timer = timerBegin(0, 80, true); // CLK is 250 MHz
-    //timerAttachInterrupt(timer, &buffer_serial, true);
-    //timerAlarmWrite(timer, 1000, true);
-    //timerAlarmEnable(timer);
-}
-#else
-void serial_interrupt_init() {
-  TCCR3A = 0;
-  TCCR3B = _BV(CS10) |
-           _BV(WGM33)|
-           _BV(WGM32);
-
-  // Buffer incoming frames every 1ms
-  ICR3 = 16000;
-
-  TIMSK3 = _BV(ICIE3);
-}
-
-ISR(TIMER3_CAPT_vect) {
-  buffer_serial();
-}
-#endif
